@@ -1,7 +1,7 @@
 {
   "info": {
     "title": "Shipmozo Shipping API",
-    "description": "REST API for order fulfillment, courier assignment, tracking, warehouses, NDR, and labels. All responses use `result` (`1` = success, `0` = failure), `message`, and `data`.\n\n**Base URL:** `https://appiify.com/app/api/v1` — do not add a trailing slash.\n\n**Auth:** Send `public-key` and `private-key` headers on every protected route, or obtain keys via `POST /login`.\n\n**Rate limits:** Shipmozo returns `x-ratelimit-limit` (500) and `x-ratelimit-remaining` on each response. Quota is **500 requests per 1-minute window** per API key; `remaining` drops with each call and **refreshes when the minute rolls over**.\n\n**Support:** munish@apporio.in",
+    "description": "REST API for order fulfillment, courier assignment, tracking, warehouses, NDR, and labels. All responses use `result` (`1` = success, `0` = failure), `message`, and `data`.\n\n**Base URLs:** Dev `https://appiify.com/app/api/v1` · Live `https://shipping-api.com/app/api/v1` — do not add a trailing slash. Use the **API server** switch in the portal header.\n\n**Auth:** Send `public-key` and `private-key` headers on every protected route, or obtain keys via `POST /login`.\n\n**Rate limits:** Shipmozo returns `x-ratelimit-limit` (500) and `x-ratelimit-remaining` on each response. Quota is **500 requests per 1-minute window** per API key; `remaining` drops with each call and **refreshes when the minute rolls over**.\n\n**Support:** munish@apporio.in",
     "version": "1.0.0",
     "contact": {
       "name": "Shipmozo API Support",

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/assets/portal.css?v=10" />
+  <link rel="stylesheet" href="/assets/portal.css?v=12" />
 </head>
 <body>
   <header class="topbar">
@@ -26,7 +26,15 @@
         <a href="#/execute" class="topnav-link" data-nav="execute">API Tester</a>
       </nav>
       <div class="topbar-actions">
+        <div class="backend-switch">
+          <label for="backendEnv" class="backend-label">API server</label>
+          <select id="backendEnv" class="backend-select" title="Target Shipmozo API server">
+            <option value="dev">Dev</option>
+            <option value="live">Live</option>
+          </select>
+        </div>
         <button type="button" class="btn-ghost btn-sm" id="openAuthBtn">Connect API</button>
+        <a href="#" data-postman-import class="btn-ghost btn-sm postman-toplink" target="_blank" rel="noopener noreferrer" title="Fork API collection in Postman">Fork in Postman</a>
         <span class="auth-status" id="authStatus">Not connected</span>
       </div>
     </div>
@@ -36,7 +44,7 @@
     <div class="auth-dialog-inner">
       <button type="button" class="dialog-close" id="closeAuthBtn" aria-label="Close">&times;</button>
       <h2>API credentials</h2>
-      <p class="auth-hint">Keys are stored in your browser only and sent via the local proxy to Shipmozo.</p>
+      <p class="auth-hint">Keys are stored in your browser only and sent via the local proxy to the selected API server (<span id="authBackendHint">Dev server</span>).</p>
 
       <label for="authUsername">Panel username</label>
       <input type="text" id="authUsername" placeholder="Email or phone" autocomplete="username" />
@@ -76,6 +84,6 @@
 
   <div class="toast-host" id="toastHost" aria-live="polite"></div>
 
-  <script src="/assets/portal.js?v=10" type="module"></script>
+  <script src="/assets/portal.js?v=14" type="module"></script>
 </body>
 </html>

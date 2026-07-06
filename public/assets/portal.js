@@ -1,12 +1,116 @@
-const PRODUCTION_BASE = "https://appiify.com/app/api/v1";
+const API_BACKENDS = {
+  dev: { label: "Dev server", baseUrl: "https://appiify.com/app/api/v1" },
+  live: { label: "Live server", baseUrl: "https://shipping-api.com/app/api/v1" },
+};
 const AUTH_STORAGE = "shipmozo_api_keys";
+const BACKEND_STORAGE = "shipmozo_api_backend";
 /** Static file works even when a generic static server is used; /api/spec.json needs node server.js */
+const POSTMAN_ASSETS = {
+  collection: "/assets/shipmozo.postman_collection.json",
+  envDev: "/assets/shipmozo.postman_environment.dev.json",
+  envLive: "/assets/shipmozo.postman_environment.live.json",
+};
 const SPEC_URLS = ["/assets/spec.json", "/api/spec.json"];
+
+function absAssetUrl(assetPath) {
+  return `${window.location.origin}${assetPath}`;
+}
+
+function postmanCollectionImportUrl() {
+  return `https://www.postman.com/collections/import/?collectionUrl=${encodeURIComponent(absAssetUrl(POSTMAN_ASSETS.collection))}`;
+}
+
+function postmanEnvImportUrl() {
+  const envPath = backendEnv === "live" ? POSTMAN_ASSETS.envLive : POSTMAN_ASSETS.envDev;
+  return `https://www.postman.com/environments/import/?environmentUrl=${encodeURIComponent(absAssetUrl(envPath))}`;
+}
+
+function renderPostmanActions(compact = false) {
+  const envLabel = getBackendLabel();
+  if (compact) {
+    return `
+      <a href="${esc(postmanCollectionImportUrl())}" data-postman-import class="btn-secondary postman-btn" target="_blank" rel="noopener noreferrer">Fork in Postman</a>
+      <a href="${esc(postmanEnvImportUrl())}" data-postman-env class="btn-ghost btn-sm" target="_blank" rel="noopener noreferrer" title="Import ${esc(envLabel)} environment">Fork env</a>`;
+  }
+  return `
+    <div class="section postman-section">
+      <h2>Postman</h2>
+      <p class="page-lead">Fork the full Shipmozo API collection into your Postman workspace — same flow as Shiprocket API docs. Set <code>public-key</code> and <code>private-key</code> in the environment, then send requests from Postman.</p>
+      <div class="hero-actions postman-actions">
+        <a href="${esc(postmanCollectionImportUrl())}" data-postman-import class="btn-primary postman-btn" target="_blank" rel="noopener noreferrer">Fork in Postman</a>
+        <a href="${esc(postmanEnvImportUrl())}" data-postman-env class="btn-secondary" target="_blank" rel="noopener noreferrer">Fork ${esc(envLabel)} environment</a>
+        <a href="${esc(POSTMAN_ASSETS.collection)}" download="shipmozo.postman_collection.json" class="btn-secondary">Download collection</a>
+        <a href="${esc(backendEnv === "live" ? POSTMAN_ASSETS.envLive : POSTMAN_ASSETS.envDev)}" download class="btn-secondary">Download environment</a>
+      </div>
+      <div class="note" style="margin-top:12px">
+        <strong>Setup:</strong> After fork, select the <strong>${esc(envLabel)}</strong> environment, set your API keys, then run requests. Official collection override: <code>postman/collection.json</code> in the repo.
+      </div>
+    </div>`;
+}
+
+function bindPostmanLinks(root = document) {
+  const pick = (sel) => [...document.querySelectorAll(sel), ...(root.querySelectorAll?.(sel) || [])];
+  const unique = (els) => [...new Set(els)];
+
+  unique(pick("[data-postman-import]")).forEach((el) => {
+    el.href = postmanCollectionImportUrl();
+    el.setAttribute("target", "_blank");
+    el.setAttribute("rel", "noopener noreferrer");
+    el.removeAttribute("download");
+  });
+  unique(pick("[data-postman-env]")).forEach((el) => {
+    el.href = postmanEnvImportUrl();
+    el.setAttribute("target", "_blank");
+    el.setAttribute("rel", "noopener noreferrer");
+    el.removeAttribute("download");
+  });
+}
 
 let spec = null;
 let portalMeta = null;
 let operations = [];
 let credentials = { publicKey: "", privateKey: "" };
+let backendEnv = "dev";
+
+function getApiBase() {
+  return API_BACKENDS[backendEnv]?.baseUrl || API_BACKENDS.dev.baseUrl;
+}
+
+function getBackendLabel() {
+  return API_BACKENDS[backendEnv]?.label || "Dev server";
+}
+
+function loadBackend() {
+  try {
+    const saved = localStorage.getItem(BACKEND_STORAGE);
+    if (saved === "live" || saved === "dev") backendEnv = saved;
+  } catch {
+    /* ignore */
+  }
+}
+
+function saveBackend(env) {
+  if (env !== "live" && env !== "dev") return;
+  backendEnv = env;
+  localStorage.setItem(BACKEND_STORAGE, env);
+  syncBackendUI();
+}
+
+function syncBackendUI() {
+  const sel = $("#backendEnv");
+  if (sel) sel.value = backendEnv;
+  const hint = $("#authBackendHint");
+  if (hint) hint.textContent = getBackendLabel();
+}
+
+function bindBackendSwitch() {
+  $("#backendEnv")?.addEventListener("change", (e) => {
+    saveBackend(e.target.value);
+    toast(`Using ${getBackendLabel()} — ${getApiBase()}`, "info");
+    bindPostmanLinks();
+    route();
+  });
+}
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -52,7 +156,7 @@ async function proxyRequest({ method, path, headers = {}, body }) {
   const { res, data } = await fetchJson("/api/proxy", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ method, path, headers, body }),
+    body: JSON.stringify({ method, path, headers, body, backend: backendEnv }),
   });
   if (!res.ok && data.error && !data.data) {
     throw new Error(data.message || data.error);
@@ -302,9 +406,11 @@ function schemaFromProperties(props) {
 function getRequestExample(op) {
   const content = op.requestBody?.content?.["application/json"];
   if (!content) return null;
+  if (content.example !== undefined) return content.example;
   const ex = content.examples && Object.values(content.examples)[0]?.value;
   if (ex) return ex;
   const schema = content.schema?.$ref ? resolveRef(content.schema.$ref) : content.schema;
+  if (schema?.example !== undefined) return schema.example;
   if (schema?.properties) return schemaFromProperties(schema.properties);
   return schemaExample(schema);
 }
@@ -489,6 +595,7 @@ function renderStaticIntro() {
       <div class="hero-actions">
         <button type="button" class="btn-primary" id="heroConnectBtn">Connect API keys</button>
         <a href="#/execute" class="btn-secondary">Open API Tester</a>
+        ${renderPostmanActions(true)}
       </div>
     </div>
 
@@ -504,11 +611,14 @@ function renderStaticIntro() {
     <div class="section">
       <h2>Base URL</h2>
       <div class="url-box card">
-        <label>Production</label>
-        <code>${PRODUCTION_BASE}</code>
+        <label>${esc(getBackendLabel())}</label>
+        <code>${getApiBase()}</code>
       </div>
+      <p class="muted small">Switch between <strong>Dev</strong> and <strong>Live</strong> in the header. API Tester and code samples use the selected server.</p>
       <div class="note warn"><strong>No trailing slash.</strong> Using <code>.../v1/</code> can cause CORS failures in browsers.</div>
     </div>
+
+    ${renderPostmanActions()}
 
     <div class="section">
       <h2>Response format</h2>
@@ -555,9 +665,9 @@ function renderAuthPage() {
       <h2>Option 1 — Login API (recommended for setup)</h2>
       <p>Exchange panel username and password for keys. Use the sidebar <strong>Sign in</strong> in this portal — keys are stored locally and attached to every test request.</p>
       ${renderCodeTabs(
-        buildCurl("POST", `${PRODUCTION_BASE}/login`, {}, { username: "your_username", password: "your_password" }),
-        buildNode("POST", `${PRODUCTION_BASE}/login`, {}, { username: "your_username", password: "your_password" }),
-        buildPython("POST", `${PRODUCTION_BASE}/login`, {}, { username: "your_username", password: "your_password" })
+        buildCurl("POST", `${getApiBase()}/login`, {}, { username: "your_username", password: "your_password" }),
+        buildNode("POST", `${getApiBase()}/login`, {}, { username: "your_username", password: "your_password" }),
+        buildPython("POST", `${getApiBase()}/login`, {}, { username: "your_username", password: "your_password" })
       )}
       <p>Success response includes <code>public_key</code> and <code>private_key</code> inside <code>data[0]</code>.</p>
     </div>
@@ -570,9 +680,9 @@ function renderAuthPage() {
     <div class="section">
       <h2>Send keys on every request</h2>
       ${renderCodeTabs(
-        buildCurl("GET", `${PRODUCTION_BASE}/get-warehouses`, { "public-key": "YOUR_PUBLIC_KEY", "private-key": "YOUR_PRIVATE_KEY" }, null),
-        buildNode("GET", `${PRODUCTION_BASE}/get-warehouses`, { "public-key": "YOUR_PUBLIC_KEY", "private-key": "YOUR_PRIVATE_KEY" }, null),
-        buildPython("GET", `${PRODUCTION_BASE}/get-warehouses`, { "public-key": "YOUR_PUBLIC_KEY", "private-key": "YOUR_PRIVATE_KEY" }, null)
+        buildCurl("GET", `${getApiBase()}/get-warehouses`, { "public-key": "YOUR_PUBLIC_KEY", "private-key": "YOUR_PRIVATE_KEY" }, null),
+        buildNode("GET", `${getApiBase()}/get-warehouses`, { "public-key": "YOUR_PUBLIC_KEY", "private-key": "YOUR_PRIVATE_KEY" }, null),
+        buildPython("GET", `${getApiBase()}/get-warehouses`, { "public-key": "YOUR_PUBLIC_KEY", "private-key": "YOUR_PRIVATE_KEY" }, null)
       )}
     </div>
 
@@ -697,7 +807,7 @@ function renderEndpoint(item) {
   const { method, path, op } = item;
   const params = collectParams(op, path);
   const bodyExample = getRequestExample(op);
-  const fullUrl = PRODUCTION_BASE + path;
+  const fullUrl = getApiBase() + path;
   const headers = { ...authHeaders(), "public-key": "YOUR_PUBLIC_KEY", "private-key": "YOUR_PRIVATE_KEY" };
   if (needsAuth(op) && !op.operationId?.includes("Login")) {
     delete headers["public-key"];
@@ -738,7 +848,7 @@ function renderEndpoint(item) {
       ${rateNotes ? `<p class="muted small">${esc(rateNotes)}</p>` : ""}
 
       <div class="url-box card" style="margin:16px 0">
-        <label>Production URL</label>
+        <label>${esc(getBackendLabel())} URL</label>
         <code>${esc(fullUrl)}</code>
       </div>
 
@@ -800,7 +910,7 @@ function renderTester(preselectId) {
   return `
     <div class="tester-layout">
       <h1 class="page-title">API Tester</h1>
-      <p class="page-lead">Live requests go through this portal's proxy to <code>${PRODUCTION_BASE}</code>. Connect API keys in the header — they are sent as <code>public-key</code> and <code>private-key</code> on every call.</p>
+      <p class="page-lead">Live requests go through this portal's proxy to <code>${getApiBase()}</code> (<strong>${esc(getBackendLabel())}</strong>). Connect API keys in the header — they are sent as <code>public-key</code> and <code>private-key</code> on every call.</p>
 
       <div class="tester-grid">
         <div class="card tester-form" id="testerForm">
@@ -984,7 +1094,7 @@ function bindTester(preselectId) {
 
   $("#testerCurl").addEventListener("click", () => {
     const { item, path } = buildPathAndQuery();
-    const url = PRODUCTION_BASE + path;
+    const url = getApiBase() + path;
     const headers = { ...authHeaders() };
     let body;
     try {
@@ -1079,6 +1189,7 @@ async function route() {
   if (hash === "#/" || hash === "#") {
     main.innerHTML = renderStaticIntro();
     bindCodeTabs(main);
+    bindPostmanLinks(main);
     $("#heroConnectBtn")?.addEventListener("click", openAuthDialog);
     return;
   }
@@ -1217,7 +1328,11 @@ function showProxyWarning() {
 
 async function init() {
   loadCredentials();
+  loadBackend();
+  syncBackendUI();
   bindAuthDialog();
+  bindBackendSwitch();
+  bindPostmanLinks();
   try {
     await loadSpec();
     $("#loading")?.remove();

@@ -4,7 +4,7 @@ services:
     name: shipmozo-developer-portal
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build:spec
+    buildCommand: npm install && npm run build
     startCommand: npm start
     healthCheckPath: /health
     envVars:

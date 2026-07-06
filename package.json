@@ -7,14 +7,14 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "node scripts/export-openapi.js",
+    "build": "node scripts/export-openapi.js && node scripts/export-postman.js",
     "build:spec": "node scripts/export-openapi.js",
-    "prestart": "node scripts/export-openapi.js",
+    "build:postman": "node scripts/export-postman.js",
+    "prestart": "node scripts/export-openapi.js && node scripts/export-postman.js",
     "start": "node server.js",
     "validate": "npx @redocly/cli lint public/assets/spec.json"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "yamljs": "^0.3.0"
+    "express": "^4.21.2"
   }
 }

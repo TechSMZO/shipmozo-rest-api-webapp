@@ -6,7 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY . .
-RUN npm run build:spec
+RUN npm run build
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0

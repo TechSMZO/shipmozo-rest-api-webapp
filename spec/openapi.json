@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Shipmozo Shipping API",
-    "description": "REST API for order fulfillment, courier assignment, tracking, warehouses, NDR, and labels. All responses use `result` (`1` = success, `0` = failure), `message`, and `data`.\n\n**Base URL:** `https://appiify.com/app/api/v1` — do not add a trailing slash.\n\n**Auth:** Send `public-key` and `private-key` headers on every protected route, or obtain keys via `POST /login`.\n\n**Rate limits:** Shipmozo returns `x-ratelimit-limit` (500) and `x-ratelimit-remaining` on each response. Quota is **500 requests per 1-minute window** per API key; `remaining` drops with each call and **refreshes when the minute rolls over**.\n\n**Support:** munish@apporio.in",
+    "description": "REST API for order fulfillment, courier assignment, tracking, warehouses, NDR, and labels. All responses use `result` (`1` = success, `0` = failure), `message`, and `data`.\n\n**Base URLs:** Dev `https://appiify.com/app/api/v1` · Live `https://shipping-api.com/app/api/v1` — do not add a trailing slash. Use the **API server** switch in the portal header.\n\n**Auth:** Send `public-key` and `private-key` headers on every protected route, or obtain keys via `POST /login`.\n\n**Rate limits:** Shipmozo returns `x-ratelimit-limit` (500) and `x-ratelimit-remaining` on each response. Quota is **500 requests per 1-minute window** per API key; `remaining` drops with each call and **refreshes when the minute rolls over**.\n\n**Support:** munish@apporio.in",
     "contact": {
       "name": "Shipmozo API Support",
       "email": "munish@apporio.in"
@@ -524,7 +524,7 @@
                   "order_date": {
                     "description": "Order Date",
                     "format": "string",
-                    "default": "2024-01-06"
+                    "default": "2026-06-06"
                   },
                   "consignee_name": {
                     "description": "Consignee Name",
@@ -539,7 +539,7 @@
                   "consignee_alternate_phone": {
                     "description": "Consignee Alternate Phone",
                     "format": "string",
-                    "default": "8000042323"
+                    "default": ""
                   },
                   "consignee_email": {
                     "description": "Consignee Email",
@@ -664,6 +664,40 @@
                   }
                 },
                 "type": "object"
+              },
+              "example": {
+                "order_id": "ordID",
+                "order_date": "2026-06-06",
+                "consignee_name": "John",
+                "consignee_phone": "8000042323",
+                "consignee_alternate_phone": "",
+                "consignee_email": "johnhelp@gmail.com",
+                "consignee_address_line_one": "Sector 49",
+                "consignee_address_line_two": "Sohna Road",
+                "consignee_pin_code": "122001",
+                "consignee_city": "Gurgaon",
+                "consignee_state": "Haryana",
+                "product_detail": [
+                  {
+                    "name": "Laptop",
+                    "sku_number": "22",
+                    "quantity": 1,
+                    "discount": "",
+                    "hsn": "#123",
+                    "unit_price": 1000,
+                    "product_category": "Other"
+                  }
+                ],
+                "payment_type": "PREPAID",
+                "cod_amount": "",
+                "shipping_charges": "",
+                "weight": "200",
+                "length": "10",
+                "width": "20",
+                "height": "15",
+                "warehouse_id": "",
+                "gst_ewaybill_number": "",
+                "gstin_number": ""
               }
             }
           }

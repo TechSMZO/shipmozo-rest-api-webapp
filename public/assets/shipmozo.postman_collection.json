@@ -1,0 +1,854 @@
+{
+  "info": {
+    "_postman_id": "shipmozo-api-collection",
+    "name": "Shipmozo Shipping API",
+    "description": "Shipmozo REST API — orders, couriers, tracking, warehouses, NDR, and labels.\n\n1. Import a **Shipmozo Dev** or **Shipmozo Live** environment (or set `baseUrl` yourself).\n2. Set `public-key` and `private-key` from Panel → Profile.\n3. Send requests — check `result` (`1` = success, `0` = failure).\n\nGenerated from the developer portal OpenAPI spec.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://appiify.com/app/api/v1"
+    },
+    {
+      "key": "public-key",
+      "value": ""
+    },
+    {
+      "key": "private-key",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Common",
+      "item": [
+        {
+          "name": "API health / version",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/info",
+            "description": "Get Api Version Detail"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Label",
+      "item": [
+        {
+          "name": "Generate Manifest",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/generate-manifest?awb_numbers=%7B%7Bawb_numbers%7D%7D",
+            "description": "Generate Manifest"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Order Label",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/get-order-label/{{awb_number}}?type_of_label=%7B%7Btype_of_label%7D%7D",
+            "description": "Get Order Label"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Assign Courier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/assign-courier",
+            "description": "Assign Courier",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"test123\",\n  \"courier_id\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Auto Assign Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/auto-assign-order",
+            "description": "Auto Assign Order",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"test123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "cancel order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/cancel-order",
+            "description": "cancel order",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"test123\",\n  \"awb_number\": \"38389839839839\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Ndr Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/get-ndr-all?from=%7B%7Bfrom%7D%7D&to=%7B%7Bto%7D%7D&per_page=%7B%7Bper_page%7D%7D&page=%7B%7Bpage%7D%7D",
+            "description": "Get Ndr Orders"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Order Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/get-order-detail/{{order_id}}",
+            "description": "Get Order Detail"
+          },
+          "response": []
+        },
+        {
+          "name": "international Push Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/international-push-order",
+            "description": "International Push Order on webparex system",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2024-01-06\",\n  \"consignee_name\": \"John\",\n  \"consignee_company_name\": \"John\",\n  \"consignee_phone\": \"8000042323\",\n  \"consignee_alternate_phone\": \"8000042323\",\n  \"consignee_email\": \"johnhelp@gmail.com\",\n  \"consignee_address_line_one\": \"Sector 49\",\n  \"consignee_address_line_two\": \"Sohna Road\",\n  \"consignee_country_id\": \"2\",\n  \"consignee_pin_code\": \"122001\",\n  \"consignee_city\": \"Gurgaon\",\n  \"consignee_state\": \"Haryana\",\n  \"consignee_gst_number\": \"\",\n  \"row_content\": [\n    {\n      \"name\": \"Laptop\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"tax\": 0,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"type_of_package\": \"SPS\",\n  \"shipment_purpose\": \"SCSB4\",\n  \"shipping_charges\": \"\",\n  \"weight\": \"200\",\n  \"length\": \"10\",\n  \"width\": \"20\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"\",\n  \"gst_ewaybill_number\": \"\",\n  \"gstin_number\": \"\",\n  \"currency\": \"INR\",\n  \"iec_number\": \"\",\n  \"terms_of_invoice\": \"FOB\",\n  \"ecomm\": \"NO\",\n  \"ad_code\": \"\",\n  \"invoice_number\": \"\",\n  \"invoice_date\": \"2025-04-01\",\n  \"meis\": \"NO\",\n  \"export_type\": \"NA\",\n  \"ioss_number\": \"\",\n  \"lut_number\": \"\",\n  \"lut_issue_date\": \"\",\n  \"lut_till_date\": \"\",\n  \"freight_amount\": \"\",\n  \"incoterms\": \"DDP\",\n  \"insurance_amount\": \"\",\n  \"shipper_id\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "NDR Action",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/ndr-action/{{awb_number}}?action=%7B%7Baction%7D%7D",
+            "description": "NDR Action"
+          },
+          "response": []
+        },
+        {
+          "name": "Push Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/push-order",
+            "description": "Push Order on webparex system",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2026-06-06\",\n  \"consignee_name\": \"John\",\n  \"consignee_phone\": \"8000042323\",\n  \"consignee_alternate_phone\": \"\",\n  \"consignee_email\": \"johnhelp@gmail.com\",\n  \"consignee_address_line_one\": \"Sector 49\",\n  \"consignee_address_line_two\": \"Sohna Road\",\n  \"consignee_pin_code\": \"122001\",\n  \"consignee_city\": \"Gurgaon\",\n  \"consignee_state\": \"Haryana\",\n  \"product_detail\": [\n    {\n      \"name\": \"Laptop\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"payment_type\": \"PREPAID\",\n  \"cod_amount\": \"\",\n  \"shipping_charges\": \"\",\n  \"weight\": \"200\",\n  \"length\": \"10\",\n  \"width\": \"20\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"\",\n  \"gst_ewaybill_number\": \"\",\n  \"gstin_number\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Push Return Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/push-return-order",
+            "description": "Push Return Order on webparex system",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2024-07-27\",\n  \"pickup_name\": \"John\",\n  \"pickup_phone\": \"8000042323\",\n  \"pickup_email\": \"johnhelp@gmail.com\",\n  \"pickup_address_line_one\": \"Sector 49\",\n  \"pickup_address_line_two\": \"Sohna Road\",\n  \"pickup_pin_code\": \"122001\",\n  \"pickup_city\": \"Gurgaon\",\n  \"pickup_state\": \"Haryana\",\n  \"product_detail\": [\n    {\n      \"name\": \"Product Name\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"payment_type\": \"PREPAID\",\n  \"weight\": \"2\",\n  \"length\": \"10\",\n  \"width\": \"500\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"\",\n  \"return_reason_id\": \"\",\n  \"customer_request\": \"REFUND\",\n  \"reason_comment\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Schedule Pickup (Optional)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/schedule-pickup",
+            "description": "Schedule Pickup",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"test123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Track",
+      "item": [
+        {
+          "name": "Track Order Shipment Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/track-order?awb_number=%7B%7Bawb_number%7D%7D",
+            "description": "Track Order Shipment Status"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Utility",
+      "item": [
+        {
+          "name": "Check Pincode Serviceability",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/pincode-serviceability",
+            "description": "Check Pincode Serviceability",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_pincode\": \"122001\",\n  \"delivery_pincode\": \"110001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "create shipper",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/create-shipper",
+            "description": "create shipper",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rahul\",\n  \"phone\": \"9876543210\",\n  \"email\": \"test@gmail.com\",\n  \"address_line_one\": \"delhi railway station\",\n  \"address_line_two\": \"new delhi\",\n  \"pin_code\": \"141211\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Countries",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/countries",
+            "description": "Get All Countries"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Return Reason",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/get-return-reason",
+            "description": "Get All Return Reason"
+          },
+          "response": []
+        },
+        {
+          "name": "International Rate Calculator",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/international-rate-calculator",
+            "description": "Internatinal Rate Calculator",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_pincode\": \"122001\",\n  \"delivery_pincode\": \"110001\",\n  \"delivery_country_id\": \"2\",\n  \"order_amount\": \"1000\",\n  \"type_of_package\": \"SPS\",\n  \"shipment_purpose\": \"SCSB4\",\n  \"weight\": \"500\",\n  \"dimensions\": [\n    {\n      \"no_of_box\": \"1\",\n      \"length\": \"22\",\n      \"width\": \"10\",\n      \"height\": \"10\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login & obtain API keys",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/login",
+            "description": "Login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"\",\n  \"password\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Rate Calculator",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/rate-calculator",
+            "description": "Rate Calculator",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"\",\n  \"pickup_pincode\": \"122001\",\n  \"delivery_pincode\": \"110001\",\n  \"payment_type\": \"PREPAID\",\n  \"shipment_type\": \"FORWARD\",\n  \"order_amount\": \"1000\",\n  \"type_of_package\": \"SPS\",\n  \"rov_type\": \"ROV_OWNER\",\n  \"cod_amount\": \"\",\n  \"weight\": \"500\",\n  \"dimensions\": [\n    {\n      \"no_of_box\": \"1\",\n      \"length\": \"22\",\n      \"width\": \"10\",\n      \"height\": \"10\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Warehouse",
+      "item": [
+        {
+          "name": "create Warehouse",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/create-warehouse",
+            "description": "create Warehouse",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address_title\": \"test123\",\n  \"name\": \"Rahul\",\n  \"phone\": \"9876543210\",\n  \"alternate_phone\": \"9876543210\",\n  \"email\": \"test@gmail.com\",\n  \"address_line_one\": \"delhi railway station\",\n  \"address_line_two\": \"new delhi\",\n  \"pin_code\": \"141211\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Warehouses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/get-warehouses?page=%7B%7Bpage%7D%7D",
+            "description": "Get all Warehouses"
+          },
+          "response": []
+        },
+        {
+          "name": "Order Update Warehouse",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/order/update-warehouse",
+            "description": "Order Update Warehouse",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"test123\",\n  \"warehouse_id\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

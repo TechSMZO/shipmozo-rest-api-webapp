@@ -402,7 +402,7 @@
                                     "order_date": {
                                         "description": "Order Date",
                                         "format": "string",
-                                        "default": "2024-01-06"
+                                        "default": "2026-06-06"
                                     },
                                     "consignee_name": {
                                         "description": "Consignee Name",
@@ -417,7 +417,7 @@
                                     "consignee_alternate_phone": {
                                         "description": "Consignee Alternate Phone",
                                         "format": "string",
-                                        "default": "8000042323"
+                                        "default": ""
                                     },
                                     "consignee_email": {
                                         "description": "Consignee Email",
@@ -542,6 +542,40 @@
                                     }
                                 },
                                 "type": "object"
+                            },
+                            "example": {
+                                "order_id": "ordID",
+                                "order_date": "2026-06-06",
+                                "consignee_name": "John",
+                                "consignee_phone": "8000042323",
+                                "consignee_alternate_phone": "",
+                                "consignee_email": "johnhelp@gmail.com",
+                                "consignee_address_line_one": "Sector 49",
+                                "consignee_address_line_two": "Sohna Road",
+                                "consignee_pin_code": "122001",
+                                "consignee_city": "Gurgaon",
+                                "consignee_state": "Haryana",
+                                "product_detail": [
+                                    {
+                                        "name": "Laptop",
+                                        "sku_number": "22",
+                                        "quantity": 1,
+                                        "discount": "",
+                                        "hsn": "#123",
+                                        "unit_price": 1000,
+                                        "product_category": "Other"
+                                    }
+                                ],
+                                "payment_type": "PREPAID",
+                                "cod_amount": "",
+                                "shipping_charges": "",
+                                "weight": "200",
+                                "length": "10",
+                                "width": "20",
+                                "height": "15",
+                                "warehouse_id": "",
+                                "gst_ewaybill_number": "",
+                                "gstin_number": ""
                             }
                         }
                     }

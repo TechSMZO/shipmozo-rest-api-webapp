@@ -1,12 +1,12 @@
 const express = require("express");
 const path = require("path");
 const { loadMergedSpec } = require("./lib/merge-spec");
+const { resolveBackendBase, API_BACKENDS, DEFAULT_BACKEND } = require("./lib/api-bases");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
 const publicDir = path.join(__dirname, "public");
-const PRODUCTION_BASE = "https://appiify.com/app/api/v1";
 
 const swaggerDocument = loadMergedSpec(__dirname);
 
@@ -18,7 +18,13 @@ app.get("/api/spec.json", (_req, res) => {
 });
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", portal: "shipmozo-developer-portal", proxy: true });
+  res.json({
+    status: "ok",
+    portal: "shipmozo-developer-portal",
+    proxy: true,
+    backends: API_BACKENDS,
+    defaultBackend: DEFAULT_BACKEND,
+  });
 });
 
 app.get("/openapi.json", (_req, res) => {
@@ -26,7 +32,7 @@ app.get("/openapi.json", (_req, res) => {
 });
 
 app.post("/api/proxy", async (req, res) => {
-  const { method = "GET", path: apiPath, headers = {}, body } = req.body || {};
+  const { method = "GET", path: apiPath, headers = {}, body, backend } = req.body || {};
   if (!apiPath || typeof apiPath !== "string") {
     return res.status(400).json({ error: "path is required", data: null });
   }
@@ -49,7 +55,8 @@ app.post("/api/proxy", async (req, res) => {
     });
   }
 
-  const url = PRODUCTION_BASE + pathOnly + queryPart;
+  const apiBase = resolveBackendBase(backend);
+  const url = apiBase + pathOnly + queryPart;
   const forwardHeaders = { Accept: "application/json" };
 
   for (const [key, value] of Object.entries(headers)) {
@@ -100,6 +107,7 @@ app.post("/api/proxy", async (req, res) => {
       status: upstream.status,
       statusText: upstream.statusText,
       url,
+      backend: backend === "live" ? "live" : "dev",
       data: parsed,
       rateLimit: rateLimit.limit || rateLimit.remaining ? rateLimit : undefined,
       rateLimitHeaders: {
