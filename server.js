@@ -3,13 +3,11 @@ const path = require("path");
 const fs = require("fs");
 const { loadMergedSpec } = require("./lib/merge-spec");
 const { resolveBackendBase, API_BACKENDS, DEFAULT_BACKEND } = require("./lib/api-bases");
-const {
-  POSTMAN_FILES,
-  postmanCollectionImportUrl,
-  postmanEnvImportUrl,
-  postmanCollectionSourceUrl,
-  postmanEnvSourceUrl,
-} = require("./lib/postman-urls");
+const POSTMAN_FILES = {
+  collection: "shipmozo.postman_collection.json",
+  envDev: "shipmozo.postman_environment.dev.json",
+  envLive: "shipmozo.postman_environment.live.json",
+};
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,12 +32,9 @@ app.get("/health", (req, res) => {
     backends: API_BACKENDS,
     defaultBackend: DEFAULT_BACKEND,
     postman: {
-      collectionImport: postmanCollectionImportUrl(origin),
-      envDevImport: postmanEnvImportUrl("dev", origin),
-      envLiveImport: postmanEnvImportUrl("live", origin),
-      collectionSource: postmanCollectionSourceUrl(origin),
-      envDevSource: postmanEnvSourceUrl("dev", origin),
-      envLiveSource: postmanEnvSourceUrl("live", origin),
+      collection: `${origin}/assets/${POSTMAN_FILES.collection}`,
+      envDev: `${origin}/assets/${POSTMAN_FILES.envDev}`,
+      envLive: `${origin}/assets/${POSTMAN_FILES.envLive}`,
     },
   });
 });

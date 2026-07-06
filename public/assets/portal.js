@@ -9,69 +9,36 @@ const POSTMAN_ASSETS = {
   collection: "/assets/shipmozo.postman_collection.json",
   envDev: "/assets/shipmozo.postman_environment.dev.json",
   envLive: "/assets/shipmozo.postman_environment.live.json",
-  /** GitHub raw — Postman’s import fetcher works reliably with this (not Render/onrender URLs). */
-  githubRawBase:
-    "https://raw.githubusercontent.com/ViditGupta0603/shipmozo-api-docs/main/public/assets",
 };
 const SPEC_URLS = ["/assets/spec.json", "/api/spec.json"];
 
-function postmanCollectionSourceUrl() {
-  return `${POSTMAN_ASSETS.githubRawBase}/shipmozo.postman_collection.json`;
+function currentPostmanEnvAsset() {
+  return backendEnv === "live" ? POSTMAN_ASSETS.envLive : POSTMAN_ASSETS.envDev;
 }
 
-function postmanEnvSourceUrl() {
-  const file =
-    backendEnv === "live" ? "shipmozo.postman_environment.live.json" : "shipmozo.postman_environment.dev.json";
-  return `${POSTMAN_ASSETS.githubRawBase}/${file}`;
-}
-
-function postmanCollectionImportUrl() {
-  return `https://go.postman.co/collection-import?collection-url=${encodeURIComponent(postmanCollectionSourceUrl())}`;
-}
-
-function postmanEnvImportUrl() {
-  return `https://go.postman.co/environment-import?environment-url=${encodeURIComponent(postmanEnvSourceUrl())}`;
+function currentPostmanEnvDownloadName() {
+  return backendEnv === "live" ? "shipmozo-live.postman_environment.json" : "shipmozo-dev.postman_environment.json";
 }
 
 function renderPostmanActions(compact = false) {
   const envLabel = getBackendLabel();
   if (compact) {
     return `
-      <a href="${esc(postmanCollectionImportUrl())}" data-postman-import class="btn-secondary postman-btn" target="_blank" rel="noopener noreferrer">Fork in Postman</a>
-      <a href="${esc(postmanEnvImportUrl())}" data-postman-env class="btn-ghost btn-sm" target="_blank" rel="noopener noreferrer" title="Import ${esc(envLabel)} environment">Fork env</a>`;
+      <a href="${esc(POSTMAN_ASSETS.collection)}" download="shipmozo.postman_collection.json" class="btn-secondary postman-btn">Postman collection</a>
+      <a href="${esc(currentPostmanEnvAsset())}" download="${esc(currentPostmanEnvDownloadName())}" class="btn-ghost btn-sm" title="Download ${esc(envLabel)} environment">Postman env</a>`;
   }
   return `
     <div class="section postman-section">
       <h2>Postman</h2>
-      <p class="page-lead">Fork the full Shipmozo API collection into your Postman workspace — same flow as Shiprocket API docs. Set <code>public-key</code> and <code>private-key</code> in the environment, then send requests from Postman.</p>
+      <p class="page-lead">Download the Shipmozo API collection and environment, then import in Postman: <strong>Import → Upload Files</strong>.</p>
       <div class="hero-actions postman-actions">
-        <a href="${esc(postmanCollectionImportUrl())}" data-postman-import class="btn-primary postman-btn" target="_blank" rel="noopener noreferrer">Fork in Postman</a>
-        <a href="${esc(postmanEnvImportUrl())}" data-postman-env class="btn-secondary" target="_blank" rel="noopener noreferrer">Fork ${esc(envLabel)} environment</a>
-        <a href="${esc(POSTMAN_ASSETS.collection)}" download="shipmozo.postman_collection.json" class="btn-secondary">Download collection</a>
-        <a href="${esc(backendEnv === "live" ? POSTMAN_ASSETS.envLive : POSTMAN_ASSETS.envDev)}" download class="btn-secondary">Download environment</a>
+        <a href="${esc(POSTMAN_ASSETS.collection)}" download="shipmozo.postman_collection.json" class="btn-primary postman-btn">Download collection</a>
+        <a href="${esc(currentPostmanEnvAsset())}" download="${esc(currentPostmanEnvDownloadName())}" class="btn-secondary">Download ${esc(envLabel)} environment</a>
       </div>
       <div class="note" style="margin-top:12px">
-        <strong>Setup:</strong> After fork, select the <strong>${esc(envLabel)}</strong> environment, set <code>public-key</code> and <code>private-key</code>, then send requests. Collection is loaded from GitHub raw so Postman can import it reliably.
+        <strong>Setup:</strong> Import both files in Postman, select the <strong>${esc(envLabel)}</strong> environment, set <code>public-key</code> and <code>private-key</code>, then send requests.
       </div>
     </div>`;
-}
-
-function bindPostmanLinks(root = document) {
-  const pick = (sel) => [...document.querySelectorAll(sel), ...(root.querySelectorAll?.(sel) || [])];
-  const unique = (els) => [...new Set(els)];
-
-  unique(pick("[data-postman-import]")).forEach((el) => {
-    el.href = postmanCollectionImportUrl();
-    el.setAttribute("target", "_blank");
-    el.setAttribute("rel", "noopener noreferrer");
-    el.removeAttribute("download");
-  });
-  unique(pick("[data-postman-env]")).forEach((el) => {
-    el.href = postmanEnvImportUrl();
-    el.setAttribute("target", "_blank");
-    el.setAttribute("rel", "noopener noreferrer");
-    el.removeAttribute("download");
-  });
 }
 
 let spec = null;
@@ -115,7 +82,6 @@ function bindBackendSwitch() {
   $("#backendEnv")?.addEventListener("change", (e) => {
     saveBackend(e.target.value);
     toast(`Using ${getBackendLabel()} — ${getApiBase()}`, "info");
-    bindPostmanLinks();
     route();
   });
 }
@@ -1197,7 +1163,6 @@ async function route() {
   if (hash === "#/" || hash === "#") {
     main.innerHTML = renderStaticIntro();
     bindCodeTabs(main);
-    bindPostmanLinks(main);
     $("#heroConnectBtn")?.addEventListener("click", openAuthDialog);
     return;
   }
@@ -1340,7 +1305,6 @@ async function init() {
   syncBackendUI();
   bindAuthDialog();
   bindBackendSwitch();
-  bindPostmanLinks();
   try {
     await loadSpec();
     $("#loading")?.remove();
