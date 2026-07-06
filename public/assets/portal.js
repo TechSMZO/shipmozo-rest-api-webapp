@@ -44,7 +44,11 @@ function renderPostmanActions(compact = false) {
 let spec = null;
 let portalMeta = null;
 let operations = [];
-let credentials = { publicKey: "", privateKey: "" };
+let credentialsByEnv = {
+  dev: { publicKey: "", privateKey: "" },
+  live: { publicKey: "", privateKey: "" },
+};
+let credentials = credentialsByEnv.dev;
 let backendEnv = "dev";
 
 function getApiBase() {
@@ -66,9 +70,15 @@ function loadBackend() {
 
 function saveBackend(env) {
   if (env !== "live" && env !== "dev") return;
+  persistCredentialsToStore();
   backendEnv = env;
   localStorage.setItem(BACKEND_STORAGE, env);
+  applyActiveCredentials();
   syncBackendUI();
+  syncAuthUI();
+  $("#authUsername") && ($("#authUsername").value = "");
+  $("#authPassword") && ($("#authPassword").value = "");
+  $("#authLoginMsg") && ($("#authLoginMsg").textContent = "");
 }
 
 function syncBackendUI() {
@@ -188,30 +198,71 @@ function bindLiveRateLimit(root) {
   });
 }
 
+function applyActiveCredentials() {
+  if (!credentialsByEnv[backendEnv]) {
+    credentialsByEnv[backendEnv] = { publicKey: "", privateKey: "" };
+  }
+  credentials = credentialsByEnv[backendEnv];
+}
+
+function persistCredentialsToStore() {
+  const c = getActiveCredentials();
+  credentialsByEnv[backendEnv] = {
+    publicKey: c.publicKey || "",
+    privateKey: c.privateKey || "",
+  };
+  credentials = credentialsByEnv[backendEnv];
+  try {
+    localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
+  } catch {
+    /* ignore quota errors */
+  }
+}
+
 function loadCredentials() {
+  credentialsByEnv = {
+    dev: { publicKey: "", privateKey: "" },
+    live: { publicKey: "", privateKey: "" },
+  };
   try {
     const raw = localStorage.getItem(AUTH_STORAGE);
     if (raw) {
       const parsed = JSON.parse(raw);
-      credentials = {
-        publicKey: parsed.publicKey || "",
-        privateKey: parsed.privateKey || "",
-      };
+      if (parsed.dev || parsed.live) {
+        if (parsed.dev) credentialsByEnv.dev = { ...credentialsByEnv.dev, ...parsed.dev };
+        if (parsed.live) credentialsByEnv.live = { ...credentialsByEnv.live, ...parsed.live };
+      } else if (parsed.publicKey !== undefined || parsed.privateKey !== undefined) {
+        const legacy = {
+          publicKey: parsed.publicKey || "",
+          privateKey: parsed.privateKey || "",
+        };
+        credentialsByEnv.dev = { ...legacy };
+        credentialsByEnv.live = { ...legacy };
+      }
     }
   } catch {
-    credentials = { publicKey: "", privateKey: "" };
+    credentialsByEnv = {
+      dev: { publicKey: "", privateKey: "" },
+      live: { publicKey: "", privateKey: "" },
+    };
   }
+  applyActiveCredentials();
   syncAuthUI();
 }
 
 function saveCredentials() {
-  localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentials));
+  persistCredentialsToStore();
   syncAuthUI();
 }
 
 function clearCredentials() {
   credentials = { publicKey: "", privateKey: "" };
-  localStorage.removeItem(AUTH_STORAGE);
+  credentialsByEnv[backendEnv] = { ...credentials };
+  try {
+    localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
+  } catch {
+    /* ignore */
+  }
   syncAuthUI();
 }
 
@@ -225,21 +276,22 @@ function syncAuthUI(accountHint) {
   status.classList.remove("connected", "pending");
 
   if (active.publicKey && active.privateKey) {
+    const envTag = getBackendLabel();
     if (accountHint === "verified") {
-      status.textContent = "Ready";
+      status.textContent = `${envTag} · Ready`;
       status.classList.add("connected");
       status.title = "Keys saved — account active";
     } else if (accountHint === "pending") {
-      status.textContent = "Pending verification";
+      status.textContent = `${envTag} · Pending`;
       status.classList.add("pending");
       status.title = "Keys work, but Shipmozo profile is under verification";
     } else {
-      status.textContent = "Keys saved";
+      status.textContent = `${envTag} · Keys saved`;
       status.classList.add("connected");
       status.title = `public-key: ${active.publicKey.slice(0, 10)}…`;
     }
   } else if (active.publicKey || active.privateKey) {
-    status.textContent = "Incomplete keys";
+    status.textContent = `${getBackendLabel()} · Incomplete`;
     status.title = "Enter both public-key and private-key";
   } else {
     status.textContent = "Not connected";
@@ -1300,8 +1352,8 @@ function showProxyWarning() {
 }
 
 async function init() {
-  loadCredentials();
   loadBackend();
+  loadCredentials();
   syncBackendUI();
   bindAuthDialog();
   bindBackendSwitch();

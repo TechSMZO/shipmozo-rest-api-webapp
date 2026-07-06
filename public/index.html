@@ -44,7 +44,7 @@
     <div class="auth-dialog-inner">
       <button type="button" class="dialog-close" id="closeAuthBtn" aria-label="Close">&times;</button>
       <h2>API credentials</h2>
-      <p class="auth-hint">Keys are stored in your browser only and sent via the local proxy to the selected API server (<span id="authBackendHint">Dev server</span>).</p>
+      <p class="auth-hint">Keys are stored in your browser only — <strong>separately for Dev and Live</strong>. Switching servers restores saved keys for that environment. Requests go via the local proxy to <span id="authBackendHint">Dev server</span>.</p>
 
       <label for="authUsername">Panel username</label>
       <input type="text" id="authUsername" placeholder="Email or phone" autocomplete="username" />
@@ -62,7 +62,7 @@
       <input type="password" id="authPrivateKey" placeholder="Your private key" spellcheck="false" />
       <div class="auth-dialog-actions">
         <button type="button" class="btn-primary" id="authSaveKeysBtn">Save keys</button>
-        <button type="button" class="btn-secondary" id="authClearBtn">Disconnect</button>
+        <button type="button" class="btn-secondary" id="authClearBtn">Disconnect this server</button>
       </div>
     </div>
   </dialog>
@@ -84,6 +84,6 @@
 
   <div class="toast-host" id="toastHost" aria-live="polite"></div>
 
-  <script src="/assets/portal.js?v=16" type="module"></script>
+  <script src="/assets/portal.js?v=17" type="module"></script>
 </body>
 </html>
