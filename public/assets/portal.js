@@ -25,7 +25,7 @@ function renderPostmanActions(compact = false) {
   if (compact) {
     return `
       <a href="${esc(POSTMAN_ASSETS.collection)}" download="shipmozo.postman_collection.json" class="btn-secondary postman-btn">Postman collection</a>
-      <a href="${esc(currentPostmanEnvAsset())}" download="${esc(currentPostmanEnvDownloadName())}" class="btn-ghost btn-sm" title="Download ${esc(envLabel)} environment">Postman env</a>`;
+      <a href="${esc(currentPostmanEnvAsset())}" download="${esc(currentPostmanEnvDownloadName())}" class="btn-secondary postman-btn" title="Download ${esc(envLabel)} environment">Postman environment</a>`;
   }
   return `
     <div class="section postman-section">

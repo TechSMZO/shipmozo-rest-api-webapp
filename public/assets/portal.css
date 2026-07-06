@@ -397,6 +397,10 @@ a:hover { color: var(--brand-hover); }
   color: #fff;
   border-color: rgba(255,255,255,0.35);
 }
+.hero-banner .btn-secondary:hover {
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+}
 
 .section { margin-bottom: 36px; }
 
