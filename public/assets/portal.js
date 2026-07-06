@@ -9,20 +9,28 @@ const POSTMAN_ASSETS = {
   collection: "/assets/shipmozo.postman_collection.json",
   envDev: "/assets/shipmozo.postman_environment.dev.json",
   envLive: "/assets/shipmozo.postman_environment.live.json",
+  /** GitHub raw — Postman’s import fetcher works reliably with this (not Render/onrender URLs). */
+  githubRawBase:
+    "https://raw.githubusercontent.com/ViditGupta0603/shipmozo-api-docs/main/public/assets",
 };
 const SPEC_URLS = ["/assets/spec.json", "/api/spec.json"];
 
-function absAssetUrl(assetPath) {
-  return `${window.location.origin}${assetPath}`;
+function postmanCollectionSourceUrl() {
+  return `${POSTMAN_ASSETS.githubRawBase}/shipmozo.postman_collection.json`;
+}
+
+function postmanEnvSourceUrl() {
+  const file =
+    backendEnv === "live" ? "shipmozo.postman_environment.live.json" : "shipmozo.postman_environment.dev.json";
+  return `${POSTMAN_ASSETS.githubRawBase}/${file}`;
 }
 
 function postmanCollectionImportUrl() {
-  return `https://www.postman.com/collections/import/?collectionUrl=${encodeURIComponent(absAssetUrl(POSTMAN_ASSETS.collection))}`;
+  return `https://go.postman.co/collection-import?collection-url=${encodeURIComponent(postmanCollectionSourceUrl())}`;
 }
 
 function postmanEnvImportUrl() {
-  const envPath = backendEnv === "live" ? POSTMAN_ASSETS.envLive : POSTMAN_ASSETS.envDev;
-  return `https://www.postman.com/environments/import/?environmentUrl=${encodeURIComponent(absAssetUrl(envPath))}`;
+  return `https://go.postman.co/environment-import?environment-url=${encodeURIComponent(postmanEnvSourceUrl())}`;
 }
 
 function renderPostmanActions(compact = false) {
@@ -43,7 +51,7 @@ function renderPostmanActions(compact = false) {
         <a href="${esc(backendEnv === "live" ? POSTMAN_ASSETS.envLive : POSTMAN_ASSETS.envDev)}" download class="btn-secondary">Download environment</a>
       </div>
       <div class="note" style="margin-top:12px">
-        <strong>Setup:</strong> After fork, select the <strong>${esc(envLabel)}</strong> environment, set your API keys, then run requests. Official collection override: <code>postman/collection.json</code> in the repo.
+        <strong>Setup:</strong> After fork, select the <strong>${esc(envLabel)}</strong> environment, set <code>public-key</code> and <code>private-key</code>, then send requests. Collection is loaded from GitHub raw so Postman can import it reliably.
       </div>
     </div>`;
 }

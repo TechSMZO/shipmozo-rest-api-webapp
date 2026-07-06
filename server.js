@@ -1,7 +1,15 @@
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const { loadMergedSpec } = require("./lib/merge-spec");
 const { resolveBackendBase, API_BACKENDS, DEFAULT_BACKEND } = require("./lib/api-bases");
+const {
+  POSTMAN_FILES,
+  postmanCollectionImportUrl,
+  postmanEnvImportUrl,
+  postmanCollectionSourceUrl,
+  postmanEnvSourceUrl,
+} = require("./lib/postman-urls");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,15 +25,41 @@ app.get("/api/spec.json", (_req, res) => {
   res.type("application/json").json(swaggerDocument);
 });
 
-app.get("/health", (_req, res) => {
+app.get("/health", (req, res) => {
+  const origin = `${req.protocol}://${req.get("host")}`;
   res.json({
     status: "ok",
     portal: "shipmozo-developer-portal",
     proxy: true,
     backends: API_BACKENDS,
     defaultBackend: DEFAULT_BACKEND,
+    postman: {
+      collectionImport: postmanCollectionImportUrl(origin),
+      envDevImport: postmanEnvImportUrl("dev", origin),
+      envLiveImport: postmanEnvImportUrl("live", origin),
+      collectionSource: postmanCollectionSourceUrl(origin),
+      envDevSource: postmanEnvSourceUrl("dev", origin),
+      envLiveSource: postmanEnvSourceUrl("live", origin),
+    },
   });
 });
+
+/** Postman-friendly JSON endpoints (CORS + correct content-type) */
+for (const [route, file] of Object.entries({
+  "collection.json": POSTMAN_FILES.collection,
+  "environment.dev.json": POSTMAN_FILES.envDev,
+  "environment.live.json": POSTMAN_FILES.envLive,
+})) {
+  app.get(`/postman/${route}`, (_req, res) => {
+    const filePath = path.join(publicDir, "assets", file);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "Postman file not found", file });
+    }
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.type("application/json");
+    res.sendFile(filePath);
+  });
+}
 
 app.get("/openapi.json", (_req, res) => {
   res.redirect(301, "/api/spec.json");
