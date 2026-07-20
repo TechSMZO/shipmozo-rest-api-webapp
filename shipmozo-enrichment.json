@@ -90,7 +90,6 @@
       { "code": "ORDER_NOT_FOUND", "result": "0", "typicalMessage": "Order not found", "when": "order_id unknown for assign, schedule, cancel, get-detail", "action": "Push order first; use same order_id as on your store" },
       { "code": "ORDER_ALREADY_EXISTS", "result": "0", "typicalMessage": "Order already exists", "when": "Duplicate order_id on push-order", "action": "Use unique order_id or fetch existing via get-order-detail" },
       { "code": "WAREHOUSE_REQUIRED", "result": "0", "typicalMessage": "warehouse_id is required", "when": "push-order without valid warehouse_id", "action": "Call get-warehouses or create-warehouse" },
-      { "code": "PINCODE_NOT_SERVICEABLE", "result": "0", "typicalMessage": "Not serviceable", "when": "pincode-serviceability returns serviceable: false", "action": "Choose different courier or pincode pair" },
       { "code": "COURIER_ASSIGN_FAILED", "result": "0", "typicalMessage": "Courier assignment failed", "when": "Invalid courier_id or order state", "action": "Run rate-calculator; use returned courier_id" },
       { "code": "AUTO_ASSIGN_NOT_CONFIGURED", "result": "0", "typicalMessage": "please setup auto assign", "when": "auto-assign-order without panel Settings > Auto assign", "action": "Enable auto-assign in Shipmozo panel or use assign-courier" },
       { "code": "PICKUP_ALREADY_SCHEDULED", "result": "0", "typicalMessage": "Pickup already scheduled", "when": "schedule-pickup when pickups_automatically_scheduled = YES", "action": "Skip schedule-pickup; AWB already generated" },
@@ -106,8 +105,8 @@
         "title": "Forward shipment (manual courier)",
         "steps": [
           "POST /login — store public-key & private-key",
-          "GET /get-warehouses — pick warehouse_id",
-          "POST /pincode-serviceability — verify route",
+          "POST /create-warehouse — only if no warehouse exists yet or have to use a new warehouse",
+          "GET /get-warehouses — list warehouses and confirm warehouse_id to use",
           "POST /rate-calculator — choose courier_id",
           "POST /push-order — create order in panel",
           "POST /assign-courier — assign courier & get AWB",
@@ -155,7 +154,7 @@
     ],
     "glossary": [
       { "term": "order_id", "meaning": "Your store's unique order ID; must match across push, assign, and cancel" },
-      { "term": "reference_id", "meaning": "Shipmozo reference (often same as order_id)" },
+      { "term": "reference_id", "meaning": "Shipmozo reference (often same as order_id). Note: live response bodies spell this field `refrence_id`; preserve that spelling when parsing responses." },
       { "term": "awb_number", "meaning": "Air Waybill tracking number from courier" },
       { "term": "warehouse_id", "meaning": "Pickup location ID from get-warehouses / create-warehouse" },
       { "term": "courier_id", "meaning": "Numeric ID from rate-calculator response" },
@@ -166,7 +165,7 @@
   "operations": {
     "getApiInfo": {
       "security": [],
-      "summary": "API health / version",
+      "summary": "API Health / Version",
       "x-useCases": ["Health check before batch jobs", "Verify connectivity from new server"]
     },
     "Login": {
@@ -176,10 +175,15 @@
       "x-errors": ["AUTH_LOGIN_FAILED"]
     },
     "pushOrders": {
+      "summary": "Push Order",
       "x-useCases": ["Sync e-commerce order to Shipmozo panel", "COD and prepaid orders"],
       "x-errors": ["ORDER_ALREADY_EXISTS", "WAREHOUSE_REQUIRED", "VALIDATION_ERROR"]
     },
+    "internationalPushOrder": {
+      "summary": "International Push Order"
+    },
     "pushReturnOrder": {
+      "summary": "Push Return Order",
       "x-useCases": ["Customer return with pickup from customer address"],
       "x-errors": ["VALIDATION_ERROR", "ORDER_NOT_FOUND"]
     },
@@ -192,6 +196,7 @@
       "x-errors": ["ORDER_NOT_FOUND", "PICKUP_ALREADY_SCHEDULED"]
     },
     "cancelOrder": {
+      "summary": "Cancel Order",
       "x-useCases": ["Cancel before courier pickup"],
       "x-errors": ["ORDER_NOT_FOUND", "CANCEL_NOT_ALLOWED"]
     },
@@ -199,15 +204,23 @@
       "x-useCases": ["One-shot assign when panel auto-assign is configured"],
       "x-errors": ["AUTO_ASSIGN_NOT_CONFIGURED", "ORDER_NOT_FOUND"]
     },
-    "pincodeServiceability": {
-      "x-useCases": ["Checkout pincode check", "Pre-validate before push-order"]
-    },
     "trackOrder": {
+      "summary": "Track Order",
       "x-errors": ["AWB_NOT_FOUND"]
     },
     "getReturnReason": {
+      "summary": "Get Return Reason",
       "security": [{ "ApiKeyPublic": [] }, { "ApiKeyPrivate": [] }],
       "x-useCases": ["Populate return reason dropdown before push-return-order"]
+    },
+    "createShipper": {
+      "summary": "Create Shipper"
+    },
+    "createWarehouse": {
+      "summary": "Create Warehouse"
+    },
+    "getAllNdrShipments": {
+      "summary": "Get NDR Orders"
     }
   }
 }

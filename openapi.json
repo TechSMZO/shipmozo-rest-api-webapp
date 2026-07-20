@@ -365,7 +365,7 @@
                     "Orders"
                 ],
                 "summary": "Push Order",
-                "description": "Push Order on webparex system",
+                "description": "Push Order in Shipmozo",
                 "operationId": "pushOrders",
                 "parameters": [
                     {
@@ -574,7 +574,7 @@
                     "Orders"
                 ],
                 "summary": "international Push Order",
-                "description": "International Push Order on webparex system",
+                "description": "International Push Order in Shipmozo",
                 "operationId": "internationalPushOrder",
                 "parameters": [
                     {
@@ -887,7 +887,7 @@
                     "Orders"
                 ],
                 "summary": "Push Return Order",
-                "description": "Push Return Order on webparex system",
+                "description": "Push Return Order in Shipmozo",
                 "operationId": "pushReturnOrder",
                 "parameters": [
                     {
@@ -2100,6 +2100,6 @@
     ],
     "externalDocs": {
         "description": "Download Pdf",
-        "url": "https://webparex.in/public/sample-file/api-documentation.pdf"
+        "url": "https://shipping-api.com"
     }
 }

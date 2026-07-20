@@ -24,7 +24,7 @@
       "name": "Common",
       "item": [
         {
-          "name": "API health / version",
+          "name": "API Health / Version",
           "request": {
             "method": "GET",
             "header": [
@@ -182,7 +182,7 @@
           "response": []
         },
         {
-          "name": "cancel order",
+          "name": "Cancel Order",
           "request": {
             "method": "POST",
             "header": [
@@ -222,7 +222,7 @@
           "response": []
         },
         {
-          "name": "Get Ndr Orders",
+          "name": "Get NDR Orders",
           "request": {
             "method": "GET",
             "header": [
@@ -274,7 +274,7 @@
           "response": []
         },
         {
-          "name": "international Push Order",
+          "name": "International Push Order",
           "request": {
             "method": "POST",
             "header": [
@@ -300,7 +300,7 @@
               }
             ],
             "url": "{{baseUrl}}/international-push-order",
-            "description": "International Push Order on webparex system",
+            "description": "International Push Order in Shipmozo",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2024-01-06\",\n  \"consignee_name\": \"John\",\n  \"consignee_company_name\": \"John\",\n  \"consignee_phone\": \"8000042323\",\n  \"consignee_alternate_phone\": \"8000042323\",\n  \"consignee_email\": \"johnhelp@gmail.com\",\n  \"consignee_address_line_one\": \"Sector 49\",\n  \"consignee_address_line_two\": \"Sohna Road\",\n  \"consignee_country_id\": \"2\",\n  \"consignee_pin_code\": \"122001\",\n  \"consignee_city\": \"Gurgaon\",\n  \"consignee_state\": \"Haryana\",\n  \"consignee_gst_number\": \"\",\n  \"row_content\": [\n    {\n      \"name\": \"Laptop\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"tax\": 0,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"type_of_package\": \"SPS\",\n  \"shipment_purpose\": \"SCSB4\",\n  \"shipping_charges\": \"\",\n  \"weight\": \"200\",\n  \"length\": \"10\",\n  \"width\": \"20\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"\",\n  \"gst_ewaybill_number\": \"\",\n  \"gstin_number\": \"\",\n  \"currency\": \"INR\",\n  \"iec_number\": \"\",\n  \"terms_of_invoice\": \"FOB\",\n  \"ecomm\": \"NO\",\n  \"ad_code\": \"\",\n  \"invoice_number\": \"\",\n  \"invoice_date\": \"2025-04-01\",\n  \"meis\": \"NO\",\n  \"export_type\": \"NA\",\n  \"ioss_number\": \"\",\n  \"lut_number\": \"\",\n  \"lut_issue_date\": \"\",\n  \"lut_till_date\": \"\",\n  \"freight_amount\": \"\",\n  \"incoterms\": \"DDP\",\n  \"insurance_amount\": \"\",\n  \"shipper_id\": \"\"\n}",
@@ -366,7 +366,7 @@
               }
             ],
             "url": "{{baseUrl}}/push-order",
-            "description": "Push Order on webparex system",
+            "description": "Push Order in Shipmozo",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2026-06-06\",\n  \"consignee_name\": \"John\",\n  \"consignee_phone\": \"8000042323\",\n  \"consignee_alternate_phone\": \"\",\n  \"consignee_email\": \"johnhelp@gmail.com\",\n  \"consignee_address_line_one\": \"Sector 49\",\n  \"consignee_address_line_two\": \"Sohna Road\",\n  \"consignee_pin_code\": \"122001\",\n  \"consignee_city\": \"Gurgaon\",\n  \"consignee_state\": \"Haryana\",\n  \"product_detail\": [\n    {\n      \"name\": \"Laptop\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"payment_type\": \"PREPAID\",\n  \"cod_amount\": \"\",\n  \"shipping_charges\": \"\",\n  \"weight\": \"200\",\n  \"length\": \"10\",\n  \"width\": \"20\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"\",\n  \"gst_ewaybill_number\": \"\",\n  \"gstin_number\": \"\"\n}",
@@ -406,7 +406,7 @@
               }
             ],
             "url": "{{baseUrl}}/push-return-order",
-            "description": "Push Return Order on webparex system",
+            "description": "Push Return Order in Shipmozo",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2024-07-27\",\n  \"pickup_name\": \"John\",\n  \"pickup_phone\": \"8000042323\",\n  \"pickup_email\": \"johnhelp@gmail.com\",\n  \"pickup_address_line_one\": \"Sector 49\",\n  \"pickup_address_line_two\": \"Sohna Road\",\n  \"pickup_pin_code\": \"122001\",\n  \"pickup_city\": \"Gurgaon\",\n  \"pickup_state\": \"Haryana\",\n  \"product_detail\": [\n    {\n      \"name\": \"Product Name\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"payment_type\": \"PREPAID\",\n  \"weight\": \"2\",\n  \"length\": \"10\",\n  \"width\": \"500\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"\",\n  \"return_reason_id\": \"\",\n  \"customer_request\": \"REFUND\",\n  \"reason_comment\": \"\"\n}",
@@ -465,7 +465,7 @@
       "name": "Track",
       "item": [
         {
-          "name": "Track Order Shipment Status",
+          "name": "Track Order",
           "request": {
             "method": "GET",
             "header": [
@@ -496,47 +496,7 @@
       "name": "Utility",
       "item": [
         {
-          "name": "Check Pincode Serviceability",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "public-key",
-                "value": "{{public-key}}",
-                "type": "text"
-              },
-              {
-                "key": "private-key",
-                "value": "{{private-key}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/pincode-serviceability",
-            "description": "Check Pincode Serviceability",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"pickup_pincode\": \"122001\",\n  \"delivery_pincode\": \"110001\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "create shipper",
+          "name": "Create Shipper",
           "request": {
             "method": "POST",
             "header": [
@@ -743,7 +703,7 @@
       "name": "Warehouse",
       "item": [
         {
-          "name": "create Warehouse",
+          "name": "Create Warehouse",
           "request": {
             "method": "POST",
             "header": [

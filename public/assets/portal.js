@@ -276,6 +276,7 @@ function syncAuthUI(accountHint) {
   status.classList.remove("connected", "pending");
 
   if (active.publicKey && active.privateKey) {
+    setJourney({ connected: true });
     const envTag = getBackendLabel();
     if (accountHint === "verified") {
       status.textContent = `${envTag} · Ready`;
@@ -302,28 +303,30 @@ function syncAuthUI(accountHint) {
 /** Explain Shipmozo result/message in plain language */
 function interpretShipmozoResponse(payload) {
   if (!payload || typeof payload !== "object") return null;
-  const msg = (payload.message || "").toLowerCase();
-  if (payload.result === "1") {
-    return { type: "ok", title: "Success", text: payload.message || "Request succeeded." };
+  const message = payload.message || "";
+  const msg = message.toLowerCase();
+  const failureReason = payload.data?.error || message || "The API returned result 0.";
+  if (payload.result === "1" || payload.result === 1) {
+    return { type: "ok", title: "✅ Success", text: message || "Request succeeded." };
   }
   if (msg.includes("under verification") || msg.includes("profile is under")) {
     return {
       type: "pending",
-      title: "Account pending verification (not an API key issue)",
+      title: "⏳ Account pending verification (not an API key issue)",
       text: "Your public-key and private-key are accepted, but Shipmozo has not activated your seller profile yet. Complete verification in the Shipmozo panel (KYC / documents). API calls will return result \"0\" until approval.",
     };
   }
   if (msg.includes("invalid") && (msg.includes("key") || msg.includes("credential"))) {
     return {
       type: "error",
-      title: "Invalid API keys",
+      title: "❌ Failed: Invalid API keys",
       text: "Shipmozo rejected the keys. Copy fresh keys from Panel → Profile or sign in again.",
     };
   }
   return {
     type: "error",
-    title: "Request failed",
-    text: payload.message || "result is 0 — see response data for details.",
+    title: `❌ Failed: ${failureReason}`,
+    text: "HTTP status can still be 200 — check result, then data.error or message.",
   };
 }
 
@@ -482,10 +485,17 @@ function needsAuth(op) {
   return op.security !== undefined && op.security.length > 0;
 }
 
+function maskHeaderValue(name, value) {
+  if (!value || !["public-key", "private-key"].includes(name.toLowerCase()) || /^YOUR_/i.test(value)) {
+    return value;
+  }
+  return `${value.slice(0, 3)}••••`;
+}
+
 function buildCurl(method, url, headers, body) {
   let s = `curl -X ${method} "${url}"`;
   for (const [k, v] of Object.entries(headers)) {
-    if (v) s += ` \\\n  -H "${k}: ${v}"`;
+    if (v) s += ` \\\n  -H "${k}: ${maskHeaderValue(k, v)}"`;
   }
   if (body)
     s += ` \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify(body).replace(/'/g, "'\\''")}'`;
@@ -611,6 +621,7 @@ function renderRateLimitByEndpointTable() {
 function renderStaticIntro() {
   const g = portalMeta.rateLimitGlobal || { limit: 500 };
   const rlHeaders = portalMeta.rateLimitHeaders;
+  const connected = !!(getActiveCredentials().publicKey && getActiveCredentials().privateKey);
   return `
     <div class="hero-banner">
       <div class="hero-logo-wrap">
@@ -619,11 +630,17 @@ function renderStaticIntro() {
       <h2>Developer portal</h2>
       <p>Integrate orders, couriers, tracking, warehouses, and returns. Connect your API keys and test live from the browser.</p>
       <div class="hero-actions">
-        <button type="button" class="btn-primary" id="heroConnectBtn">Connect API keys</button>
+        <button type="button" class="btn-primary" id="heroConnectBtn">${connected ? "Manage API keys" : "Connect API keys"}</button>
         <a href="#/execute" class="btn-secondary">Open API Tester</a>
         ${renderPostmanActions(true)}
       </div>
+      ${
+        connected
+          ? ""
+          : `<p class="hero-start-hint">Start here: connect your keys before using the API Tester or Postman downloads.</p>`
+      }
     </div>
+    <div class="note warn"><strong>Dev sandbox behavior:</strong> Dev requests run against a live sandbox. Pushing an order creates a real order and AWB on your account, so cancel test orders when you're done. Dev and Live use separate keys.</div>
 
     <div class="section">
       <h2>What you can build</h2>
@@ -640,6 +657,11 @@ function renderStaticIntro() {
         <label>${esc(getBackendLabel())}</label>
         <code>${getApiBase()}</code>
       </div>
+      <p class="base-url-note">
+        <strong>Dev</strong> (<code>appiify.com</code>) is the staging host used by this portal when Dev is selected.
+        <strong>Live</strong> (<code>shipping-api.com</code>) is the production API documented for go-live.
+        Switch servers in the header — API Tester and code samples follow the selection. Keys are stored separately per environment.
+      </p>
       <p class="muted small">Switch between <strong>Dev</strong> and <strong>Live</strong> in the header. API Tester and code samples use the selected server.</p>
       <div class="note warn"><strong>No trailing slash.</strong> Using <code>.../v1/</code> can cause CORS failures in browsers.</div>
     </div>
@@ -712,6 +734,7 @@ function renderAuthPage() {
       )}
     </div>
 
+    <div class="note warn"><strong>Dev sandbox behavior:</strong> Dev requests can create real orders and AWBs on your account. Cancel test orders when you're done. Dev and Live use separate keys.</div>
     <div class="note"><strong>Security:</strong> Never expose <code>private-key</code> in front-end apps or mobile clients. Call Shipmozo from your backend only.</div>`;
 }
 
@@ -928,23 +951,195 @@ function renderEndpoint(item) {
     </article>`;
 }
 
+const JOURNEY_STORAGE = "shipmozo_portal_journey_v1";
+const DEFAULT_TESTER_OPERATION_ID = "get-/info";
+
+const TESTER_ENUM_OPTIONS = {
+  payment_type: ["PREPAID", "COD"],
+  shipment_type: ["FORWARD", "RETURN"],
+  type_of_package: ["SPS", "B2B", "MPS"],
+  rov_type: ["ROV_OWNER", "ROV_CARRIER"],
+  order_type: ["ESSENTIALS", "NON ESSENTIALS"],
+  shipment_purpose: ["SCSB4", "CSB5", "DSCB4"],
+};
+
+const TESTER_UNIT_FACTS = {
+  "/push-order": "Weight is in grams. Dimensions (length, width, height) are in cm. Dates use YYYY-MM-DD.",
+  "/rate-calculator": "Weight is in grams. Dimensions (length, width, height) are in cm.",
+  "/push-return-order": "Weight is in kg. Dimensions (length, width, height) are in cm. Dates use YYYY-MM-DD.",
+};
+
+const TESTER_PREREQS = {
+  "/push-order": {
+    text: "You'll need: warehouse_id (from Get Warehouses).",
+    opId: "get-/get-warehouses",
+    label: "Get Warehouses",
+  },
+  "/push-return-order": {
+    text: "You'll need: warehouse_id (from Get Warehouses) and return_reason_id (from Get Return Reason).",
+    opId: "get-/get-warehouses",
+    label: "Get Warehouses",
+  },
+  "/assign-courier": {
+    text: "You'll need: courier_id (from Rate Calculator) and an existing order_id.",
+    opId: "post-/rate-calculator",
+    label: "Rate Calculator",
+  },
+  "/auto-assign-order": {
+    text: "You'll need: an order created via Push Order first.",
+    opId: "post-/push-order",
+    label: "Push Order",
+  },
+  "/schedule-pickup": {
+    text: "You'll need: an assigned shipment / AWB from Assign Courier.",
+    opId: "post-/assign-courier",
+    label: "Assign Courier",
+  },
+  "/get-order-label/{awb_number}": {
+    text: "You'll need: awb_number from Assign Courier (or order detail).",
+    opId: "post-/assign-courier",
+    label: "Assign Courier",
+  },
+  "/track-order": {
+    text: "You'll need: awb_number or order identifiers from a pushed/assigned shipment.",
+    opId: "post-/push-order",
+    label: "Push Order",
+  },
+  "/order/update-warehouse": {
+    text: "You'll need: warehouse_id from Get Warehouses or Create Warehouse.",
+    opId: "get-/get-warehouses",
+    label: "Get Warehouses",
+  },
+};
+
+const OPTGROUP_ORDER = [
+  { key: "Orders", label: "Orders", tags: ["Orders"] },
+  { key: "Tracking", label: "Tracking", tags: ["Track", "Label"] },
+  { key: "Warehouse", label: "Warehouse", tags: ["Warehouse"] },
+  { key: "Utility", label: "Utility", tags: ["Utility", "Common"] },
+  { key: "Auth", label: "Auth", tags: [] },
+];
+
+function getJourney() {
+  try {
+    return JSON.parse(sessionStorage.getItem(JOURNEY_STORAGE) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function setJourney(patch) {
+  const next = { ...getJourney(), ...patch };
+  try {
+    sessionStorage.setItem(JOURNEY_STORAGE, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+  return next;
+}
+
+function syncJourneyFromAuth() {
+  const c = getActiveCredentials();
+  if (c.publicKey && c.privateKey) setJourney({ connected: true });
+}
+
+function updateJourneyFromCall(item, payload) {
+  if (!item) return;
+  setJourney({ tested: true });
+  const ok = payload && (payload.result === "1" || payload.result === 1);
+  if (!ok) return;
+  if (["/get-warehouses", "/create-warehouse"].includes(item.path)) setJourney({ warehouseReady: true });
+  if (item.path === "/push-order" || item.path === "/push-return-order") setJourney({ pushed: true });
+  if (["/rate-calculator", "/international-rate-calculator"].includes(item.path)) setJourney({ rated: true });
+  if (["/assign-courier", "/auto-assign-order"].includes(item.path)) setJourney({ courierAssigned: true });
+  if (["/get-order-label/{awb_number}", "/generate-manifest"].includes(item.path)) setJourney({ labeled: true });
+  if (["/track-order", "/cancel-order"].includes(item.path)) setJourney({ completed: true });
+}
+
+function renderJourneyStrip() {
+  syncJourneyFromAuth();
+  const j = getJourney();
+  const steps = [
+    { id: "connected", label: "Connect", done: !!j.connected },
+    { id: "tested", label: "Test a call", done: !!j.tested },
+    { id: "warehouseReady", label: "Create / Get warehouse", done: !!j.warehouseReady },
+    { id: "pushed", label: "Push order", done: !!j.pushed },
+    { id: "rated", label: "Rate calculator", done: !!j.rated },
+    { id: "courierAssigned", label: "Assign courier", done: !!j.courierAssigned },
+    { id: "labeled", label: "Label", done: !!j.labeled },
+    { id: "completed", label: "Track or cancel", done: !!j.completed },
+  ];
+  let foundCurrent = false;
+  const parts = [];
+  steps.forEach((s, i) => {
+    let cls = "journey-step";
+    if (s.done) cls += " done";
+    else if (!foundCurrent) {
+      cls += " current";
+      foundCurrent = true;
+    }
+    if (i > 0) parts.push(`<span class="journey-sep" aria-hidden="true">→</span>`);
+    parts.push(
+      `<span class="${cls}"><span class="journey-num">${s.done ? "✓" : i + 1}</span>${esc(s.label)}</span>`
+    );
+  });
+  return `<nav class="journey-strip" aria-label="Integration progress">${parts.join("")}</nav>`;
+}
+
+function testerGroupForOp(o) {
+  if (o.path === "/login") return "Auth";
+  for (const g of OPTGROUP_ORDER) {
+    if (g.tags.includes(o.tag)) return g.key;
+  }
+  return "Utility";
+}
+
+function renderTesterOpOptions(preselectId) {
+  const preferredFirst = "post-/push-order";
+  const groups = Object.fromEntries(OPTGROUP_ORDER.map((g) => [g.key, []]));
+  operations.forEach((o) => {
+    const g = testerGroupForOp(o);
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(o);
+  });
+  if (groups.Orders?.length) {
+    groups.Orders.sort((a, b) => {
+      if (a.id === preferredFirst) return -1;
+      if (b.id === preferredFirst) return 1;
+      return a.path.localeCompare(b.path);
+    });
+  }
+  return OPTGROUP_ORDER.map((g) => {
+    const list = groups[g.key] || [];
+    if (!list.length) return "";
+    const opts = list
+      .map(
+        (o) =>
+          `<option value="${o.id}" ${o.id === preselectId ? "selected" : ""}>${o.method} ${o.path} — ${esc(o.summary)}</option>`
+      )
+      .join("");
+    return `<optgroup label="${esc(g.label)}">${opts}</optgroup>`;
+  }).join("");
+}
+
 function renderTester(preselectId) {
-  const opts = operations
-    .map((o) => `<option value="${o.id}" ${o.id === preselectId ? "selected" : ""}>${o.method} ${o.path} — ${esc(o.summary)}</option>`)
-    .join("");
+  const opts = renderTesterOpOptions(preselectId);
 
   return `
     <div class="tester-layout">
       <h1 class="page-title">API Tester</h1>
       <p class="page-lead">Live requests go through this portal's proxy to <code>${getApiBase()}</code> (<strong>${esc(getBackendLabel())}</strong>). Connect API keys in the header — they are sent as <code>public-key</code> and <code>private-key</code> on every call.</p>
+      ${renderJourneyStrip()}
 
       <div class="tester-grid">
         <div class="card tester-form" id="testerForm">
-          <label>API endpoint</label>
-          <select id="testerOp">${opts}</select>
+          <label for="testerOp">API endpoint</label>
+          <select id="testerOp" aria-label="API endpoint">${opts}</select>
+          <div id="testerPrereq" class="tester-prereq hidden"></div>
           <div id="testerParams"></div>
-          <label>Request body (JSON)</label>
-          <textarea id="testerBody" rows="12" placeholder="{}"></textarea>
+          <label for="testerBody">Request body (JSON)</label>
+          <textarea id="testerBody" rows="12" placeholder="{}" aria-label="Request body (JSON)"></textarea>
+          <div id="testerEnumHints" class="tester-enum-hints hidden"></div>
           <div class="tester-actions">
             <button type="button" class="btn-primary" id="testerRun">Execute API</button>
             <button type="button" class="btn-secondary" id="testerCurl">Copy cURL</button>
@@ -954,7 +1149,7 @@ function renderTester(preselectId) {
           <div class="rate-live-values small" id="testerRateLive">Rate limit: click Execute or Check rate limit</div>
         </div>
         <div class="card">
-          <h3 class="tester-response-title">Response</h3>
+          <h2 class="tester-response-title">Response</h2>
           <div class="response-meta" id="testerMeta">Select an API and click Execute.</div>
           <div class="response-box"><pre id="testerOut">{}</pre></div>
         </div>
@@ -967,9 +1162,34 @@ function bindTester(preselectId) {
   const paramsDiv = $("#testerParams");
   const bodyTa = $("#testerBody");
   const hint = $("#testerAuthHint");
+  const prereqEl = $("#testerPrereq");
+  const enumEl = $("#testerEnumHints");
 
   function currentOp() {
     return operations.find((o) => o.id === opSelect.value);
+  }
+
+  function updateEndpointHelpers() {
+    const item = currentOp();
+    if (!item) return;
+    const prereq = TESTER_PREREQS[item.path];
+    if (prereq && prereqEl) {
+      prereqEl.classList.remove("hidden");
+      prereqEl.innerHTML = `${esc(prereq.text)} <a href="#/execute?op=${encodeURIComponent(prereq.opId)}">Jump to ${esc(prereq.label)} →</a>`;
+    } else if (prereqEl) {
+      prereqEl.classList.add("hidden");
+      prereqEl.innerHTML = "";
+    }
+    const enums = TESTER_ENUM_HINTS[item.path];
+    if (enums?.length && enumEl) {
+      enumEl.classList.remove("hidden");
+      enumEl.innerHTML =
+        `<strong>Allowed values:</strong> ` +
+        enums.map((e) => `<code>${esc(e.field)}</code> → ${esc(e.values)}`).join(" · ");
+    } else if (enumEl) {
+      enumEl.classList.add("hidden");
+      enumEl.innerHTML = "";
+    }
   }
 
   function fillForm() {
@@ -985,6 +1205,7 @@ function bindTester(preselectId) {
         inp.dataset.param = p.name;
         inp.dataset.in = p.in;
         inp.placeholder = p.schema?.example || p.name;
+        inp.setAttribute("aria-label", `${p.name} (${p.in})`);
         if (p.name === "awb_number") inp.value = "";
         if (p.name === "order_id") inp.value = "test123";
         paramsDiv.appendChild(lab);
@@ -1009,11 +1230,19 @@ function bindTester(preselectId) {
       hint.className = "hint-ok";
       hint.textContent = "No API keys required for this endpoint.";
     }
+    updateEndpointHelpers();
   }
 
-  opSelect.addEventListener("change", fillForm);
+  opSelect.addEventListener("change", () => {
+    fillForm();
+    const item = currentOp();
+    if (item) history.replaceState(null, "", `#/execute?op=${encodeURIComponent(item.id)}`);
+  });
   fillForm();
-  if (preselectId) opSelect.value = preselectId;
+  if (preselectId) {
+    opSelect.value = preselectId;
+    fillForm();
+  }
 
   function buildPathAndQuery() {
     const item = currentOp();
@@ -1070,6 +1299,9 @@ function bindTester(preselectId) {
         $("#testerOut").textContent = wrapped.message;
       } else {
         const payload = wrapped.data;
+        updateJourneyFromCall(item, payload);
+        const strip = document.querySelector(".journey-strip");
+        if (strip) strip.outerHTML = renderJourneyStrip();
         const interpretation = interpretShipmozoResponse(payload);
         const pre = $("#testerOut");
         const bannerId = "testerResultBanner";
@@ -1078,6 +1310,7 @@ function bindTester(preselectId) {
           if (!banner && pre?.parentElement) {
             banner = document.createElement("div");
             banner.id = bannerId;
+            banner.setAttribute("role", "status");
             pre.parentElement.insertBefore(banner, pre);
           }
           if (banner) {
@@ -1134,6 +1367,417 @@ function bindTester(preselectId) {
   });
 }
 
+function resolveTesterOperationId(requestedId) {
+  if (requestedId && operations.some((operation) => operation.id === requestedId)) return requestedId;
+  if (operations.some((operation) => operation.id === DEFAULT_TESTER_OPERATION_ID)) return DEFAULT_TESTER_OPERATION_ID;
+  return operations[0]?.id || "";
+}
+
+function getRequestBodySchema(op) {
+  const schema = op.requestBody?.content?.["application/json"]?.schema;
+  return schema?.$ref ? resolveRef(schema.$ref) : schema;
+}
+
+function getEnumFieldsForOperation(item) {
+  const properties = getRequestBodySchema(item.op)?.properties || {};
+  return Object.keys(TESTER_ENUM_OPTIONS).filter((field) => Object.hasOwn(properties, field));
+}
+
+function getTesterExampleText(item) {
+  const example = getRequestExample(item.op);
+  return example ? JSON.stringify(example, null, 2) : "";
+}
+
+async function copyText(text, label) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(`${label} copied`, "ok");
+  } catch {
+    const fallback = document.createElement("textarea");
+    fallback.value = text;
+    fallback.setAttribute("readonly", "");
+    fallback.style.position = "fixed";
+    fallback.style.opacity = "0";
+    document.body.appendChild(fallback);
+    fallback.select();
+    document.execCommand("copy");
+    fallback.remove();
+    toast(`${label} copied`, "ok");
+  }
+}
+
+function renderPhase1Tester(preselectId) {
+  const selectedId = resolveTesterOperationId(preselectId);
+  const opts = renderTesterOpOptions(selectedId);
+
+  return `
+    <div class="tester-layout">
+      <h1 class="page-title">API Tester</h1>
+      <p class="page-lead">Requests go through this portal's proxy to <code>${getApiBase()}</code> (<strong>${esc(getBackendLabel())}</strong>). The response body below is the exact Shipmozo API body.</p>
+      <div class="tester-safety-note"><strong>Dev requests run against a live sandbox:</strong> pushing an order creates a real order and AWB on your account. Cancel test orders when you're done. Dev and Live use separate keys.</div>
+      ${renderJourneyStrip()}
+
+      <div class="tester-grid">
+        <div class="card tester-form" id="testerForm">
+          <label for="testerOp">API endpoint</label>
+          <select id="testerOp" aria-label="API endpoint">${opts}</select>
+          <div id="testerPrereq" class="tester-prereq hidden"></div>
+          <div id="testerUnitFacts" class="tester-unit-facts hidden"></div>
+          <div id="testerParams"></div>
+          <label for="testerBody">Request body (JSON)</label>
+          <textarea id="testerBody" rows="12" placeholder="{}" aria-label="Request body (JSON)"></textarea>
+          <div id="testerEnumControls" class="tester-enum-controls hidden"></div>
+          <div class="tester-actions">
+            <button type="button" class="btn-primary" id="testerRun">Execute API</button>
+            <button type="button" class="btn-secondary" id="testerCurl">Copy cURL</button>
+            <button type="button" class="btn-secondary" id="testerCopyRequest">Copy request</button>
+            <button type="button" class="btn-secondary" id="testerReset">Reset example</button>
+            <button type="button" class="btn-secondary" id="testerRateBtn">Check rate limit</button>
+          </div>
+          <p class="muted small" id="testerAuthHint"></p>
+          <div class="rate-live-values small" id="testerRateLive">Rate limit: click Execute or Check rate limit</div>
+        </div>
+        <div class="card tester-response-card">
+          <div class="tester-response-head">
+            <h2 class="tester-response-title">Response</h2>
+            <button type="button" class="btn-secondary btn-sm" id="testerCopyResponse">Copy response</button>
+          </div>
+          <div class="response-meta" id="testerMeta">Select an API and click Execute.</div>
+          <div class="result-banner hidden" id="testerResultBanner" role="status"></div>
+          <div class="response-tabs" role="tablist" aria-label="Response views">
+            <button type="button" class="response-tab active" role="tab" aria-selected="true" data-response-tab="body">Response Body</button>
+            <button type="button" class="response-tab" role="tab" aria-selected="false" data-response-tab="headers">Response Headers</button>
+            <button type="button" class="response-tab" role="tab" aria-selected="false" data-response-tab="debug">Debug</button>
+          </div>
+          <div class="response-panel" data-response-panel="body">
+            <div class="response-box"><pre id="testerOut">{}</pre></div>
+            <div class="label-preview hidden" id="testerLabelPreview"></div>
+          </div>
+          <div class="response-panel hidden" data-response-panel="headers">
+            <div class="response-box"><pre id="testerHeadersOut">{}</pre></div>
+          </div>
+          <div class="response-panel hidden" data-response-panel="debug">
+            <div class="response-box"><pre id="testerDebugOut">{}</pre></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function bindPhase1Tester(preselectId) {
+  const opSelect = $("#testerOp");
+  const paramsDiv = $("#testerParams");
+  const bodyTa = $("#testerBody");
+  const hint = $("#testerAuthHint");
+  const prereqEl = $("#testerPrereq");
+  const unitFactsEl = $("#testerUnitFacts");
+  const enumControlsEl = $("#testerEnumControls");
+  const bodyLabel = document.querySelector('label[for="testerBody"]');
+  let latestResponseBody = {};
+
+  function currentOp() {
+    return operations.find((operation) => operation.id === opSelect.value);
+  }
+
+  function getBodyObject() {
+    const raw = bodyTa.value.trim();
+    if (!raw) return {};
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  function getQueryObject() {
+    return Object.fromEntries(
+      [...paramsDiv.querySelectorAll('input[data-in="query"]')]
+        .filter((input) => input.value)
+        .map((input) => [input.dataset.param, input.value])
+    );
+  }
+
+  function setResponseTab(tabName) {
+    document.querySelectorAll("[data-response-tab]").forEach((tab) => {
+      const active = tab.dataset.responseTab === tabName;
+      tab.classList.toggle("active", active);
+      tab.setAttribute("aria-selected", String(active));
+    });
+    document.querySelectorAll("[data-response-panel]").forEach((panel) => {
+      panel.classList.toggle("hidden", panel.dataset.responsePanel !== tabName);
+    });
+  }
+
+  function updateResultBanner(payload) {
+    const banner = $("#testerResultBanner");
+    const interpretation = interpretShipmozoResponse(payload);
+    if (!banner || !interpretation) {
+      banner?.classList.add("hidden");
+      return;
+    }
+    banner.className = `result-banner ${interpretation.type}`;
+    banner.innerHTML = `<strong>${esc(interpretation.title)}</strong><p>${esc(interpretation.text)}</p>`;
+  }
+
+  function renderLabelPreview(payload) {
+    const host = $("#testerLabelPreview");
+    if (!host) return;
+    const entries = Array.isArray(payload?.data) ? payload.data : [payload?.data];
+    const rawLabel = entries.find((entry) => typeof entry?.label === "string")?.label;
+    if (!rawLabel) {
+      host.classList.add("hidden");
+      host.innerHTML = "";
+      return;
+    }
+    const source = rawLabel.startsWith("data:")
+      ? rawLabel
+      : `data:image/png;base64,${rawLabel.replace(/\s/g, "")}`;
+    host.classList.remove("hidden");
+    host.innerHTML = "";
+    const heading = document.createElement("h3");
+    heading.textContent = "Shipping label preview";
+    const image = document.createElement("img");
+    image.src = source;
+    image.alt = "Shipping label returned by Shipmozo";
+    const download = document.createElement("a");
+    download.href = source;
+    download.download = "shipmozo-label.png";
+    download.className = "btn-secondary btn-sm";
+    download.textContent = "Download label";
+    host.append(heading, image, download);
+  }
+
+  function renderResponse(payload, wrapped, durationMs) {
+    latestResponseBody = payload ?? {};
+    $("#testerOut").textContent = JSON.stringify(latestResponseBody, null, 2);
+    $("#testerHeadersOut").textContent = JSON.stringify(wrapped.rateLimitHeaders || {}, null, 2);
+    $("#testerDebugOut").textContent = JSON.stringify(
+      {
+        httpStatus: wrapped.status ?? 200,
+        requestDurationMs: Math.round(durationMs),
+        rateLimit: wrapped.rateLimit || {},
+      },
+      null,
+      2
+    );
+    updateResultBanner(payload);
+    renderLabelPreview(payload);
+    setResponseTab("body");
+  }
+
+  function syncEnumControlsFromBody() {
+    const body = getBodyObject();
+    if (!body) return;
+    enumControlsEl.querySelectorAll("select[data-enum-field]").forEach((select) => {
+      const value = body[select.dataset.enumField];
+      if (value && [...select.options].some((option) => option.value === String(value))) {
+        select.value = String(value);
+      }
+    });
+  }
+
+  function renderEnumControls(item) {
+    const fields = getEnumFieldsForOperation(item);
+    if (!fields.length) {
+      enumControlsEl.classList.add("hidden");
+      enumControlsEl.innerHTML = "";
+      return;
+    }
+    const body = getBodyObject() || {};
+    enumControlsEl.classList.remove("hidden");
+    enumControlsEl.innerHTML = `
+      <p class="tester-enum-title">Guided values <span>Selections update the JSON request body.</span></p>
+      <div class="tester-enum-grid">
+        ${fields
+          .map(
+            (field) => `<label for="enum-${field}">${esc(field.replaceAll("_", " "))}</label>
+              <select id="enum-${field}" data-enum-field="${field}" aria-label="${esc(field)}">
+                ${TESTER_ENUM_OPTIONS[field]
+                  .map((value) => `<option value="${esc(value)}" ${body[field] === value ? "selected" : ""}>${esc(value)}</option>`)
+                  .join("")}
+              </select>`
+          )
+          .join("")}
+      </div>`;
+    enumControlsEl.querySelectorAll("select[data-enum-field]").forEach((select) => {
+      select.addEventListener("change", () => {
+        const updatedBody = getBodyObject();
+        if (!updatedBody) {
+          toast("Fix the JSON request body before using guided values.", "error");
+          syncEnumControlsFromBody();
+          return;
+        }
+        updatedBody[select.dataset.enumField] = select.value;
+        bodyTa.value = JSON.stringify(updatedBody, null, 2);
+      });
+    });
+  }
+
+  function updateEndpointHelpers(item) {
+    const prereq = TESTER_PREREQS[item.path];
+    if (prereq) {
+      prereqEl.classList.remove("hidden");
+      prereqEl.innerHTML = `${esc(prereq.text)} <a href="#/execute?op=${encodeURIComponent(prereq.opId)}">Jump to ${esc(prereq.label)} →</a>`;
+    } else {
+      prereqEl.classList.add("hidden");
+      prereqEl.innerHTML = "";
+    }
+    const facts = TESTER_UNIT_FACTS[item.path];
+    unitFactsEl.classList.toggle("hidden", !facts);
+    unitFactsEl.textContent = facts || "";
+    renderEnumControls(item);
+  }
+
+  function fillForm() {
+    const item = currentOp();
+    if (!item) return;
+    paramsDiv.innerHTML = "";
+    collectParams(item.op, item.path)
+      .filter((parameter) => parameter.in === "path" || parameter.in === "query")
+      .forEach((parameter) => {
+        const label = document.createElement("label");
+        label.textContent = `${parameter.name} (${parameter.in})${parameter.required ? " *" : ""}`;
+        const input = document.createElement("input");
+        input.dataset.param = parameter.name;
+        input.dataset.in = parameter.in;
+        input.placeholder = parameter.schema?.example || parameter.name;
+        input.setAttribute("aria-label", `${parameter.name} (${parameter.in})`);
+        paramsDiv.append(label, input);
+      });
+
+    bodyTa.value = getTesterExampleText(item);
+    const hideBody = item.method === "GET";
+    bodyTa.classList.toggle("hidden", hideBody);
+    bodyLabel?.classList.toggle("hidden", hideBody);
+
+    const authRequired = needsAuth(item.op);
+    const credentials = getActiveCredentials();
+    if (authRequired && !credentials.publicKey) {
+      hint.className = "hint-warn";
+      hint.textContent = "Connect API keys (header button) or paste keys and click Save.";
+    } else if (authRequired) {
+      hint.className = "hint-ok";
+      hint.textContent = "API keys will be sent as public-key and private-key headers.";
+    } else {
+      hint.className = "hint-ok";
+      hint.textContent = "No API keys required for this endpoint.";
+    }
+    updateEndpointHelpers(item);
+  }
+
+  function buildPathAndQuery() {
+    const item = currentOp();
+    let path = item.path;
+    const query = [];
+    paramsDiv.querySelectorAll("input[data-param]").forEach((input) => {
+      if (input.dataset.in === "path" && input.value) path = path.replace(`{${input.dataset.param}}`, encodeURIComponent(input.value));
+      if (input.dataset.in === "query" && input.value) query.push(`${input.dataset.param}=${encodeURIComponent(input.value)}`);
+    });
+    if (query.length) path += `?${query.join("&")}`;
+    return { item, path };
+  }
+
+  document.querySelectorAll("[data-response-tab]").forEach((tab) => {
+    tab.addEventListener("click", () => setResponseTab(tab.dataset.responseTab));
+  });
+  bodyTa.addEventListener("input", syncEnumControlsFromBody);
+  opSelect.value = resolveTesterOperationId(preselectId);
+  fillForm();
+
+  opSelect.addEventListener("change", () => {
+    fillForm();
+    const item = currentOp();
+    if (item) history.replaceState(null, "", `#/execute?op=${encodeURIComponent(item.id)}`);
+  });
+
+  $("#testerRun").addEventListener("click", async () => {
+    const { item, path } = buildPathAndQuery();
+    const headers = { ...authHeaders() };
+    let body;
+    if (item.method !== "GET") {
+      body = getBodyObject();
+      if (!body) {
+        $("#testerMeta").textContent = "Invalid JSON in request body";
+        return;
+      }
+    }
+    if (needsAuth(item.op) && !headers["public-key"]) {
+      $("#testerMeta").textContent = "Missing credentials";
+      renderResponse(
+        { result: "0", message: "Missing credentials", data: { error: 'Click "Connect API" in the header, paste keys, and Save.' } },
+        {},
+        0
+      );
+      return;
+    }
+
+    $("#testerMeta").textContent = "Loading…";
+    const runBtn = $("#testerRun");
+    runBtn.disabled = true;
+    const startedAt = performance.now();
+    try {
+      const wrapped = await proxyRequest({ method: item.method, path, headers, body });
+      const durationMs = performance.now() - startedAt;
+      $("#testerMeta").textContent = `${item.method} ${path} · ${Math.round(durationMs)} ms`;
+      renderResponse(wrapped.data, wrapped, durationMs);
+      updateJourneyFromCall(item, wrapped.data);
+      const strip = document.querySelector(".journey-strip");
+      if (strip) strip.outerHTML = renderJourneyStrip();
+      if (wrapped.rateLimit?.limit) {
+        $("#testerRateLive").innerHTML = `Live headers: <strong>${esc(String(wrapped.rateLimit.remaining))}</strong> / ${esc(String(wrapped.rateLimit.limit))} remaining (this request)`;
+      }
+    } catch (error) {
+      const durationMs = performance.now() - startedAt;
+      $("#testerMeta").textContent = `Request failed · ${Math.round(durationMs)} ms`;
+      renderResponse({ result: "0", message: error.message, data: { error: error.message } }, {}, durationMs);
+    } finally {
+      runBtn.disabled = false;
+    }
+  });
+
+  $("#testerCopyRequest").addEventListener("click", () => {
+    const item = currentOp();
+    const value = item.method === "GET" ? JSON.stringify(getQueryObject(), null, 2) : bodyTa.value || "{}";
+    copyText(value, "Request");
+  });
+
+  $("#testerCopyResponse").addEventListener("click", () => {
+    copyText(JSON.stringify(latestResponseBody, null, 2), "Response");
+  });
+
+  $("#testerReset").addEventListener("click", () => {
+    bodyTa.value = getTesterExampleText(currentOp());
+    syncEnumControlsFromBody();
+    toast("Example restored", "ok");
+  });
+
+  $("#testerCurl").addEventListener("click", () => {
+    const { item, path } = buildPathAndQuery();
+    const body = item.method === "GET" ? undefined : getBodyObject();
+    if (item.method !== "GET" && !body) {
+      toast("Fix the JSON request body before copying cURL.", "error");
+      return;
+    }
+    copyText(buildCurl(item.method, getApiBase() + path, authHeaders(), body), "cURL");
+  });
+
+  $("#testerRateBtn")?.addEventListener("click", async () => {
+    const rateLimitOutput = $("#testerRateLive");
+    rateLimitOutput.textContent = "Checking…";
+    try {
+      const live = await fetchLiveRateLimit();
+      const rateLimit = live.rateLimit;
+      if (rateLimit?.limit) {
+        rateLimitOutput.innerHTML = `Live headers: <strong>${esc(String(rateLimit.remaining))}</strong> / ${esc(String(rateLimit.limit))} via <code>${esc(live.via)}</code> @ ${esc(rateLimit.observedAt || "")}`;
+      } else {
+        rateLimitOutput.textContent = "No rate-limit headers returned.";
+      }
+    } catch (error) {
+      rateLimitOutput.textContent = error.message;
+    }
+  });
+}
+
 function buildSidebar(filter = "") {
   const nav = $("#sidebarNav");
   const q = filter.toLowerCase();
@@ -1169,12 +1813,22 @@ function buildSidebar(filter = "") {
 
   html += `<div class="nav-group"><div class="nav-group-title">Tools</div><a class="nav-link" href="#/execute">API Tester</a></div>`;
 
-  const tagOrder = ["Common", "Utility", "Orders", "Warehouse", "Track", "Label"];
+  const tagOrder = ["Common", "Warehouse", "Orders", "Track", "Label", "Utility"];
   const tags = [...new Set([...tagOrder, ...Object.keys(byTag)])];
   tags.forEach((tag) => {
     if (!byTag[tag]?.length) return;
     html += `<div class="nav-group"><div class="nav-group-title">${esc(tag)}</div>`;
-    byTag[tag].forEach((o) => {
+    const items = [...byTag[tag]];
+    if (tag === "Orders") {
+      const rateCalculator = operations.find((operation) => operation.path === "/rate-calculator");
+      const rateCalculatorMatchesFilter =
+        !q || `${rateCalculator?.method} ${rateCalculator?.path} ${rateCalculator?.summary}`.toLowerCase().includes(q);
+      const assignCourierIndex = items.findIndex((operation) => operation.path === "/assign-courier");
+      if (rateCalculator && rateCalculatorMatchesFilter && assignCourierIndex >= 0) {
+        items.splice(assignCourierIndex, 0, rateCalculator);
+      }
+    }
+    items.forEach((o) => {
       html += `<a class="nav-link" href="#/api/${o.id}"><span class="method method-${o.method}">${o.method}</span>${esc(o.summary)}</a>`;
     });
     html += `</div>`;
@@ -1185,18 +1839,19 @@ function buildSidebar(filter = "") {
 
 function setActiveNav() {
   const hash = location.hash || "#/";
+  const h = hash.split("?")[0];
   document.querySelectorAll(".nav-link").forEach((a) => {
-    a.classList.toggle("active", a.getAttribute("href") === hash.split("?")[0]);
+    a.classList.toggle("active", a.getAttribute("href") === h);
   });
   document.querySelectorAll(".topnav-link").forEach((a) => {
     const nav = a.dataset.nav;
-    const h = hash.split("?")[0];
     a.classList.toggle(
       "active",
-      (nav === "execute" && h.startsWith("#/execute")) ||
+      (nav === "execute" && h === "#/execute") ||
         (nav === "workflows" && h === "#/workflows") ||
-        (nav === "errors" && (h === "#/errors" || h === "#/rate-limits")) ||
-        (nav === "docs" && !["#/execute", "#/workflows", "#/errors", "#/rate-limits"].some((x) => h.startsWith(x)))
+        (nav === "errors" && h === "#/errors") ||
+        (nav === "rate-limits" && h === "#/rate-limits") ||
+        (nav === "docs" && !["#/execute", "#/workflows", "#/errors", "#/rate-limits"].includes(h))
     );
   });
 }
@@ -1204,12 +1859,17 @@ function setActiveNav() {
 async function route() {
   const main = $("#main");
   const hash = location.hash || "#/";
+  const searchInput = $("#searchInput");
+  if (searchInput?.value) {
+    searchInput.value = "";
+    buildSidebar();
+  }
   setActiveNav();
 
   if (hash.startsWith("#/execute")) {
     const op = new URLSearchParams(hash.split("?")[1] || "").get("op");
-    main.innerHTML = renderTester(op);
-    bindTester(op);
+    main.innerHTML = renderPhase1Tester(op);
+    bindPhase1Tester(op);
     return;
   }
   if (hash === "#/" || hash === "#") {
@@ -1255,14 +1915,34 @@ async function route() {
   bindCodeTabs(main);
 }
 
+function setModalOpen(open) {
+  document.body.classList.toggle("modal-open", !!open);
+  if (open) document.body.style.overflow = "hidden";
+  else document.body.style.overflow = "";
+}
+
 function openAuthDialog() {
   const dlg = $("#authDialog");
-  if (dlg?.showModal) dlg.showModal();
+  if (!dlg) return;
+  setModalOpen(true);
+  if (dlg.showModal) dlg.showModal();
+  else dlg.setAttribute("open", "");
+}
+
+function closeAuthDialog() {
+  const dlg = $("#authDialog");
+  dlg?.close?.();
+  dlg?.removeAttribute("open");
+  setModalOpen(false);
 }
 
 function bindAuthDialog() {
   $("#openAuthBtn")?.addEventListener("click", openAuthDialog);
-  $("#closeAuthBtn")?.addEventListener("click", () => $("#authDialog")?.close());
+  $("#closeAuthBtn")?.addEventListener("click", closeAuthDialog);
+
+  const dlg = $("#authDialog");
+  dlg?.addEventListener("close", () => setModalOpen(false));
+  dlg?.addEventListener("cancel", () => setModalOpen(false));
 
   $("#authLoginBtn")?.addEventListener("click", async () => {
     const u = $("#authUsername").value.trim();
@@ -1278,10 +1958,11 @@ function bindAuthDialog() {
     msg.className = "auth-login-msg";
     try {
       await loginWithPassword(u, p);
+      setJourney({ connected: true });
       msg.className = "auth-login-msg ok";
       msg.textContent = "Keys saved. You can close this dialog.";
       toast("API keys connected", "ok");
-      $("#authDialog")?.close();
+      closeAuthDialog();
     } catch (e) {
       msg.className = "auth-login-msg error";
       msg.textContent = e.message;
@@ -1300,6 +1981,7 @@ function bindAuthDialog() {
     credentials.publicKey = c.publicKey;
     credentials.privateKey = c.privateKey;
     saveCredentials();
+    setJourney({ connected: true });
     msg.className = "auth-login-msg";
     msg.textContent = "Checking account with Shipmozo…";
     const accountState = await probeAccountStatus();
@@ -1313,12 +1995,12 @@ function bindAuthDialog() {
       msg.className = "auth-login-msg ok";
       msg.textContent = "Keys saved. Account is active.";
       toast("Keys saved — account ready", "ok");
-      $("#authDialog")?.close();
+      closeAuthDialog();
     } else {
       msg.className = "auth-login-msg ok";
       msg.textContent = "Keys saved locally.";
       toast("API keys saved", "ok");
-      $("#authDialog")?.close();
+      closeAuthDialog();
     }
   });
 

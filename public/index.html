@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/assets/portal.css?v=18" />
+  <link rel="stylesheet" href="/assets/portal.css?v=19" />
 </head>
 <body>
   <header class="topbar">
@@ -21,14 +21,14 @@
       <nav class="topnav" aria-label="Main">
         <a href="#/" class="topnav-link" data-nav="docs">Docs</a>
         <a href="#/workflows" class="topnav-link" data-nav="workflows">Flows</a>
-        <a href="#/rate-limits" class="topnav-link" data-nav="errors">Rate limits</a>
+        <a href="#/rate-limits" class="topnav-link" data-nav="rate-limits">Rate limits</a>
         <a href="#/errors" class="topnav-link" data-nav="errors">Errors</a>
         <a href="#/execute" class="topnav-link" data-nav="execute">API Tester</a>
       </nav>
       <div class="topbar-actions">
         <div class="backend-switch">
           <label for="backendEnv" class="backend-label">API server</label>
-          <select id="backendEnv" class="backend-select" title="Target Shipmozo API server">
+          <select id="backendEnv" class="backend-select" title="Target Shipmozo API server" aria-label="API server">
             <option value="dev">Dev</option>
             <option value="live">Live</option>
           </select>
@@ -40,10 +40,25 @@
     </div>
   </header>
 
-  <dialog class="auth-dialog" id="authDialog">
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-search">
+        <input type="search" id="searchInput" placeholder="Search endpoints…" autocomplete="off" aria-label="Search endpoints" />
+      </div>
+      <nav class="sidebar-nav" id="sidebarNav" aria-label="API reference"></nav>
+    </aside>
+    <main class="main" id="main">
+      <div class="loading" id="loading">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Loading API documentation…</p>
+      </div>
+    </main>
+  </div>
+
+  <dialog class="auth-dialog" id="authDialog" role="dialog" aria-modal="true" aria-labelledby="authDialogTitle">
     <div class="auth-dialog-inner">
       <button type="button" class="dialog-close" id="closeAuthBtn" aria-label="Close">&times;</button>
-      <h2>API credentials</h2>
+      <p class="auth-dialog-title" id="authDialogTitle">API credentials</p>
       <p class="auth-hint">Keys are stored in your browser only — <strong>separately for Dev and Live</strong>. Switching servers restores saved keys for that environment. Requests go via the local proxy to <span id="authBackendHint">Dev server</span>.</p>
 
       <label for="authUsername">Panel username</label>
@@ -67,23 +82,8 @@
     </div>
   </dialog>
 
-  <div class="layout">
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-search">
-        <input type="search" id="searchInput" placeholder="Search endpoints…" autocomplete="off" />
-      </div>
-      <nav class="sidebar-nav" id="sidebarNav" aria-label="API reference"></nav>
-    </aside>
-    <main class="main" id="main">
-      <div class="loading" id="loading">
-        <div class="spinner" aria-hidden="true"></div>
-        <p>Loading API documentation…</p>
-      </div>
-    </main>
-  </div>
-
   <div class="toast-host" id="toastHost" aria-live="polite"></div>
 
-  <script src="/assets/portal.js?v=18" type="module"></script>
+  <script src="/assets/portal.js?v=21" type="module"></script>
 </body>
 </html>

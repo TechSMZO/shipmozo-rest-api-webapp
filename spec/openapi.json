@@ -72,102 +72,6 @@
         }
       }
     },
-    "/pincode-serviceability": {
-      "post": {
-        "tags": [
-          "Utility"
-        ],
-        "summary": "Check Pincode Serviceability",
-        "description": "Check Pincode Serviceability",
-        "operationId": "pincodeServiceability",
-        "parameters": [
-          {
-            "name": "public-key",
-            "in": "header",
-            "description": "Api Public Key",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "private-key",
-            "in": "header",
-            "description": "Api Private Key",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Pincode Serviceability Required Parameters",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "pickup_pincode": {
-                    "description": "Pickup Pincode",
-                    "format": "string",
-                    "default": "122001"
-                  },
-                  "delivery_pincode": {
-                    "description": "Delivery Pincode",
-                    "format": "string",
-                    "default": "110001"
-                  }
-                },
-                "type": "object"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "example": {
-                    "result": "1",
-                    "message": "Success",
-                    "data": {
-                      "serviceable": true
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          }
-        },
-        "x-useCases": [
-          "Checkout pincode check",
-          "Pre-validate before push-order"
-        ],
-        "security": [
-          {
-            "ApiKeyPublic": []
-          },
-          {
-            "ApiKeyPrivate": []
-          }
-        ],
-        "x-rateLimit": {
-          "limit": 500,
-          "remainingHeader": "x-ratelimit-remaining",
-          "limitHeader": "x-ratelimit-limit",
-          "window": "1 minute",
-          "windowSeconds": 60,
-          "windowBehavior": "x-ratelimit-remaining only changes when Shipmozo sends a new HTTP response to you — it does not tick down on its own in the browser. Each API call lowers remaining by 1. After ~60 seconds, the next call you make usually shows remaining closer to 500 again (sliding window, not a live clock on the docs page).",
-          "sharedQuota": true,
-          "notes": "Checkout / pre-push validation"
-        }
-      }
-    },
     "/get-return-reason": {
       "get": {
         "tags": [
@@ -232,7 +136,7 @@
         "tags": [
           "Track"
         ],
-        "summary": "Track Order Shipment Status",
+        "summary": "Track Order",
         "description": "Track Order Shipment Status",
         "operationId": "trackOrder",
         "parameters": [
@@ -300,7 +204,7 @@
         "tags": [
           "Utility"
         ],
-        "summary": "create shipper",
+        "summary": "Create Shipper",
         "description": "create shipper",
         "operationId": "createShipper",
         "parameters": [
@@ -487,7 +391,7 @@
           "Orders"
         ],
         "summary": "Push Order",
-        "description": "Push Order on webparex system",
+        "description": "Push Order in Shipmozo",
         "operationId": "pushOrders",
         "parameters": [
           {
@@ -583,10 +487,12 @@
                           "type": "string"
                         },
                         "quantity": {
-                          "type": "number"
+                          "type": "number",
+                          "default": 1
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "string",
+                          "default": ""
                         },
                         "hsn": {
                           "type": "string"
@@ -759,8 +665,8 @@
         "tags": [
           "Orders"
         ],
-        "summary": "international Push Order",
-        "description": "International Push Order on webparex system",
+        "summary": "International Push Order",
+        "description": "International Push Order in Shipmozo",
         "operationId": "internationalPushOrder",
         "parameters": [
           {
@@ -1094,7 +1000,7 @@
           "Orders"
         ],
         "summary": "Push Return Order",
-        "description": "Push Return Order on webparex system",
+        "description": "Push Return Order in Shipmozo",
         "operationId": "pushReturnOrder",
         "parameters": [
           {
@@ -1519,7 +1425,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "cancel order",
+        "summary": "Cancel Order",
         "description": "cancel order",
         "operationId": "cancelOrder",
         "parameters": [
@@ -1782,7 +1688,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Get Ndr Orders",
+        "summary": "Get NDR Orders",
         "description": "Get Ndr Orders",
         "operationId": "getAllNdrShipments",
         "parameters": [
@@ -2418,7 +2324,7 @@
         "tags": [
           "Warehouse"
         ],
-        "summary": "create Warehouse",
+        "summary": "Create Warehouse",
         "description": "create Warehouse",
         "operationId": "createWarehouse",
         "parameters": [
@@ -2633,7 +2539,7 @@
         "tags": [
           "Common"
         ],
-        "summary": "API health / version",
+        "summary": "API Health / Version",
         "description": "Get Api Version Detail",
         "operationId": "getApiInfo",
         "responses": {
@@ -2690,7 +2596,7 @@
   ],
   "externalDocs": {
     "description": "Download Pdf",
-    "url": "https://webparex.in/public/sample-file/api-documentation.pdf"
+    "url": "https://shipping-api.com"
   },
   "components": {
     "securitySchemes": {
@@ -2867,13 +2773,6 @@
         "action": "Call get-warehouses or create-warehouse"
       },
       {
-        "code": "PINCODE_NOT_SERVICEABLE",
-        "result": "0",
-        "typicalMessage": "Not serviceable",
-        "when": "pincode-serviceability returns serviceable: false",
-        "action": "Choose different courier or pincode pair"
-      },
-      {
         "code": "COURIER_ASSIGN_FAILED",
         "result": "0",
         "typicalMessage": "Courier assignment failed",
@@ -2936,8 +2835,8 @@
         "title": "Forward shipment (manual courier)",
         "steps": [
           "POST /login — store public-key & private-key",
-          "GET /get-warehouses — pick warehouse_id",
-          "POST /pincode-serviceability — verify route",
+          "POST /create-warehouse — only if no warehouse exists yet or have to use a new warehouse",
+          "GET /get-warehouses — list warehouses and confirm warehouse_id to use",
           "POST /rate-calculator — choose courier_id",
           "POST /push-order — create order in panel",
           "POST /assign-courier — assign courier & get AWB",
@@ -2990,7 +2889,7 @@
       },
       {
         "term": "reference_id",
-        "meaning": "Shipmozo reference (often same as order_id)"
+        "meaning": "Shipmozo reference (often same as order_id). Note: live response bodies spell this field `refrence_id`; preserve that spelling when parsing responses."
       },
       {
         "term": "awb_number",
@@ -3196,15 +3095,6 @@
         "auth": false,
         "limit": 500,
         "notes": "Cache keys after success; do not poll login"
-      },
-      {
-        "operationId": "pincodeServiceability",
-        "method": "POST",
-        "path": "/pincode-serviceability",
-        "tag": "Utility",
-        "auth": true,
-        "limit": 500,
-        "notes": "Checkout / pre-push validation"
       },
       {
         "operationId": "rateCalculator",
