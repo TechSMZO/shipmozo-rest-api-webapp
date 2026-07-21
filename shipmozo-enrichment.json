@@ -99,6 +99,49 @@
       { "code": "RATE_LIMIT", "result": "0", "typicalMessage": "Rate limit exceeded", "when": "x-ratelimit-remaining hits 0 within the 1-minute window or HTTP 429", "action": "Pause calls; retry after ~60s when remaining rises again" },
       { "code": "CORS_TRAILING_SLASH", "result": "—", "typicalMessage": "Browser CORS error", "when": "Base URL ends with /", "action": "Use https://appiify.com/app/api/v1 without trailing slash" }
     ],
+    "navigation": {
+      "categories": [
+        { "id": "start-connect", "label": "Start & Connect", "keywords": ["start", "connect", "health", "authentication", "login"] },
+        { "id": "warehouses-pickup", "label": "Warehouses & Pickup Setup", "keywords": ["warehouse", "pickup", "location"] },
+        { "id": "domestic-shipments", "label": "Domestic Shipments", "keywords": ["domestic", "forward", "shipment", "courier", "rate", "pickup"] },
+        { "id": "labels-tracking", "label": "Labels & Tracking", "keywords": ["label", "manifest", "tracking", "awb"] },
+        { "id": "returns", "label": "Returns", "keywords": ["return", "reverse", "reason"] },
+        { "id": "international-shipments", "label": "International Shipments", "keywords": ["international", "country", "shipper", "export"] },
+        { "id": "order-management", "label": "Order Management & Exceptions", "keywords": ["order", "cancel", "ndr", "exception", "detail"] }
+      ],
+      "operations": {
+        "getApiInfo": { "category": "start-connect", "order": 10, "keywords": ["api version", "health check"] },
+        "Login": { "category": "start-connect", "order": 20, "keywords": ["credentials", "api keys"] },
+
+        "getWarehouses": { "category": "warehouses-pickup", "order": 10, "keywords": ["warehouse id", "pickup address"] },
+        "createWarehouse": { "category": "warehouses-pickup", "order": 20, "keywords": ["new warehouse", "pickup location"] },
+        "orderUpdateWarehouse": { "category": "warehouses-pickup", "order": 30, "keywords": ["change warehouse", "order warehouse"] },
+
+        "pushOrders": { "category": "domestic-shipments", "order": 10, "keywords": ["create order", "forward order"] },
+        "pincodeServiceability": { "category": "domestic-shipments", "order": 15, "keywords": ["pincode", "serviceability", "lane"] },
+        "rateCalculator": { "category": "domestic-shipments", "order": 20, "keywords": ["rate", "courier id", "quote"] },
+        "assignCourier": { "category": "domestic-shipments", "order": 30, "keywords": ["assign", "courier", "awb"] },
+        "autoCourierAssign": { "category": "domestic-shipments", "order": 40, "keywords": ["auto assign", "courier", "awb"] },
+        "schedulePickup": { "category": "domestic-shipments", "order": 50, "keywords": ["schedule", "pickup"] },
+
+        "getOrderLabel": { "category": "labels-tracking", "order": 10, "keywords": ["shipping label", "awb"] },
+        "generateManifest": { "category": "labels-tracking", "order": 20, "keywords": ["manifest", "bulk awb"] },
+        "trackOrder": { "category": "labels-tracking", "order": 30, "keywords": ["track", "tracking status", "awb"] },
+
+        "getReturnReason": { "category": "returns", "order": 10, "keywords": ["return reason", "reverse shipment"] },
+        "pushReturnOrder": { "category": "returns", "order": 20, "keywords": ["return order", "reverse pickup"] },
+
+        "Countries": { "category": "international-shipments", "order": 10, "keywords": ["countries", "international"] },
+        "createShipper": { "category": "international-shipments", "order": 20, "keywords": ["shipper", "exporter"] },
+        "internationalRateCalculator": { "category": "international-shipments", "order": 30, "keywords": ["international rate", "export quote"] },
+        "internationalPushOrder": { "category": "international-shipments", "order": 40, "keywords": ["international order", "export shipment"] },
+
+        "getOrderDetail": { "category": "order-management", "order": 10, "keywords": ["order detail", "order status"] },
+        "cancelOrder": { "category": "order-management", "order": 20, "keywords": ["cancel", "cancel shipment"] },
+        "getAllNdrShipments": { "category": "order-management", "order": 30, "keywords": ["ndr", "non delivery"] },
+        "ndrOrderAction": { "category": "order-management", "order": 40, "keywords": ["ndr action", "reattempt", "rto"] }
+      }
+    },
     "workflows": [
       {
         "id": "forward-standard",
@@ -107,8 +150,8 @@
           "POST /login — store public-key & private-key",
           "POST /create-warehouse — only if no warehouse exists yet or have to use a new warehouse",
           "GET /get-warehouses — list warehouses and confirm warehouse_id to use",
-          "POST /rate-calculator — choose courier_id",
           "POST /push-order — create order in panel",
+          "POST /rate-calculator — choose courier_id",
           "POST /assign-courier — assign courier & get AWB",
           "If pickups_automatically_scheduled = NO → POST /schedule-pickup",
           "GET /get-order-label/{awb_number} — shipping label",
@@ -172,7 +215,22 @@
       "security": [],
       "summary": "Login & obtain API keys",
       "x-useCases": ["Bootstrap integration — fetch public_key and private_key", "Rotate keys after password change"],
-      "x-errors": ["AUTH_LOGIN_FAILED"]
+      "x-errors": ["AUTH_LOGIN_FAILED"],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": [{ "name": "Seller Name", "public_key": "YOUR_PUBLIC_KEY", "private_key": "YOUR_PRIVATE_KEY" }]
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "pushOrders": {
       "summary": "Push Order",
@@ -180,7 +238,22 @@
       "x-errors": ["ORDER_ALREADY_EXISTS", "WAREHOUSE_REQUIRED", "VALIDATION_ERROR"]
     },
     "internationalPushOrder": {
-      "summary": "International Push Order"
+      "summary": "International Push Order",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": "[PLACEHOLDER — needs live verification]"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "pushReturnOrder": {
       "summary": "Push Return Order",
@@ -220,7 +293,112 @@
       "summary": "Create Warehouse"
     },
     "getAllNdrShipments": {
-      "summary": "Get NDR Orders"
+      "summary": "Get NDR Orders",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": "[PLACEHOLDER — needs live verification]"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "pincodeServiceability": {
+      "summary": "Pincode Serviceability",
+      "x-useCases": ["Check lane before push-order at checkout"],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": { "serviceable": true }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Countries": {
+      "summary": "Get Countries",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": "[PLACEHOLDER — needs live verification]"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "getOrderDetail": {
+      "summary": "Get Order Detail",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": "[PLACEHOLDER — needs live verification]"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "generateManifest": {
+      "summary": "Generate Manifest",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": "[PLACEHOLDER — needs live verification]"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "internationalRateCalculator": {
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": "[PLACEHOLDER — needs live verification]"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

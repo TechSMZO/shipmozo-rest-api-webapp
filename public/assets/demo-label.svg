@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="480" viewBox="0 0 320 480">
+  <rect width="320" height="480" fill="#fff" stroke="#334155" stroke-width="2"/>
+  <rect x="16" y="16" width="288" height="48" fill="#0f172a"/>
+  <text x="32" y="46" fill="#fff" font-family="Arial,sans-serif" font-size="14" font-weight="bold">SHIPMOZO  DEMO LABEL</text>
+  <text x="16" y="88" fill="#64748b" font-family="Arial,sans-serif" font-size="11">AWB: 14519141688764</text>
+  <text x="16" y="108" fill="#64748b" font-family="Arial,sans-serif" font-size="11">FROM: Gurugram Warehouse, 122018</text>
+  <text x="16" y="128" fill="#64748b" font-family="Arial,sans-serif" font-size="11">TO: Demo Customer, 122001</text>
+  <rect x="16" y="148" width="288" height="80" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="80" y="198" fill="#94a3b8" font-family="monospace" font-size="24">���������</text>
+  <text x="16" y="260" fill="#0f172a" font-family="Arial,sans-serif" font-size="12" font-weight="bold">Courier: Delhivery Surface 0.5 KG</text>
+  <text x="16" y="440" fill="#94a3b8" font-family="Arial,sans-serif" font-size="10">DEMO DATA  not a real shipping label</text>
+</svg>

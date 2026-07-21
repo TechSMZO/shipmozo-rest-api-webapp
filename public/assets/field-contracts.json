@@ -1,0 +1,187 @@
+{
+  "pushOrders": {
+    "title": "Push Order",
+    "fields": [
+      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "Must match your own system's order ID" },
+      { "field": "order_date", "type": "string", "required": true, "values": "YYYY-MM-DD", "notes": "" },
+      { "field": "order_type", "type": "string", "required": false, "values": "ESSENTIALS, NON ESSENTIALS", "notes": "" },
+      { "field": "consignee_name", "type": "string", "required": true, "values": "—", "notes": "" },
+      { "field": "consignee_phone", "type": "number", "required": true, "values": "digits only", "notes": "" },
+      { "field": "consignee_alternate_phone", "type": "number", "required": false, "values": "digits only", "notes": "" },
+      { "field": "consignee_email", "type": "string", "required": false, "values": "—", "notes": "" },
+      { "field": "consignee_address_line_one", "type": "string", "required": true, "values": "—", "notes": "" },
+      { "field": "consignee_address_line_two", "type": "string", "required": false, "values": "—", "notes": "" },
+      { "field": "consignee_pin_code", "type": "number", "required": true, "values": "—", "notes": "" },
+      { "field": "consignee_city", "type": "string", "required": true, "values": "—", "notes": "" },
+      { "field": "consignee_state", "type": "string", "required": true, "values": "—", "notes": "" },
+      { "field": "product_detail", "type": "array", "required": true, "values": "objects: name, sku_number, quantity, discount, hsn, unit_price, product_category", "notes": "product_category is free text" },
+      { "field": "payment_type", "type": "string", "required": true, "values": "PREPAID, COD", "notes": "" },
+      { "field": "cod_amount", "type": "string", "required": false, "values": "—", "notes": "Required in practice when payment_type=COD" },
+      { "field": "weight", "type": "number", "required": true, "values": "grams", "notes": "" },
+      { "field": "length, width, height", "type": "number", "required": true, "values": "cm", "notes": "" },
+      { "field": "warehouse_id", "type": "string", "required": true, "values": "—", "notes": "From Get Warehouses / Create Warehouse" },
+      { "field": "gst_ewaybill_number, gstin_number", "type": "string", "required": false, "values": "—", "notes": "" }
+    ]
+  },
+  "pushReturnOrder": {
+    "title": "Push Return Order",
+    "fields": [
+      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "" },
+      { "field": "order_date", "type": "string", "required": true, "values": "YYYY-MM-DD", "notes": "" },
+      { "field": "order_type", "type": "string", "required": false, "values": "e.g. ESSENTIALS", "notes": "" },
+      { "field": "pickup_name", "type": "string", "required": true, "values": "—", "notes": "" },
+      { "field": "pickup_phone", "type": "number", "required": true, "values": "digits only", "notes": "" },
+      { "field": "pickup_email", "type": "string", "required": false, "values": "—", "notes": "" },
+      { "field": "pickup_address_line_one", "type": "string", "required": true, "values": "—", "notes": "" },
+      { "field": "pickup_address_line_two", "type": "string", "required": false, "values": "—", "notes": "" },
+      { "field": "pickup_pin_code", "type": "number", "required": true, "values": "—", "notes": "" },
+      { "field": "pickup_city", "type": "string", "required": true, "values": "—", "notes": "" },
+      { "field": "pickup_state", "type": "string", "required": true, "values": "—", "notes": "" },
+      { "field": "product_detail", "type": "array", "required": true, "values": "same shape as Push Order", "notes": "" },
+      { "field": "payment_type", "type": "string", "required": true, "values": "PREPAID, COD", "notes": "" },
+      { "field": "weight", "type": "number", "required": true, "values": "kg", "notes": "Differs from Push Order (grams)" },
+      { "field": "length, width, height", "type": "number", "required": true, "values": "cm", "notes": "" },
+      { "field": "warehouse_id", "type": "string", "required": false, "values": "—", "notes": "" },
+      { "field": "return_reason_id", "type": "number", "required": true, "values": "from Get Return Reason", "notes": "" },
+      { "field": "customer_request", "type": "string", "required": true, "values": "e.g. REFUND", "notes": "Full enum [PLACEHOLDER]" },
+      { "field": "reason_comment", "type": "string", "required": false, "values": "—", "notes": "" }
+    ]
+  },
+  "assignCourier": {
+    "title": "Assign Courier",
+    "fields": [
+      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "Internal order_id from Push Order response" },
+      { "field": "courier_id", "type": "number", "required": true, "values": "—", "notes": "From Rate Calculator response" }
+    ]
+  },
+  "schedulePickup": {
+    "title": "Schedule Pickup",
+    "fields": [
+      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "Only needed if courier pickups_automatically_scheduled = NO" }
+    ]
+  },
+  "cancelOrder": {
+    "title": "Cancel Order",
+    "fields": [
+      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "Internal order_id" },
+      { "field": "awb_number", "type": "number", "required": true, "values": "—", "notes": "" }
+    ]
+  },
+  "autoCourierAssign": {
+    "title": "Auto Assign Order",
+    "fields": [
+      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "Requires auto-assign configured in panel Settings first" }
+    ]
+  },
+  "rateCalculator": {
+    "title": "Rate Calculator",
+    "fields": [
+      { "field": "order_id", "type": "string", "required": false, "values": "—", "notes": "Only if calculating for an existing order" },
+      { "field": "pickup_pincode", "type": "number", "required": true, "values": "—", "notes": "" },
+      { "field": "delivery_pincode", "type": "number", "required": true, "values": "—", "notes": "" },
+      { "field": "payment_type", "type": "string", "required": true, "values": "PREPAID, COD", "notes": "" },
+      { "field": "shipment_type", "type": "string", "required": true, "values": "FORWARD, RETURN", "notes": "" },
+      { "field": "order_amount", "type": "number", "required": true, "values": "—", "notes": "" },
+      { "field": "type_of_package", "type": "string", "required": true, "values": "SPS, B2B, MPS", "notes": "" },
+      { "field": "rov_type", "type": "string", "required": true, "values": "ROV_OWNER, ROV_CARRIER", "notes": "" },
+      { "field": "cod_amount", "type": "string", "required": false, "values": "—", "notes": "" },
+      { "field": "weight", "type": "number", "required": true, "values": "grams", "notes": "" },
+      { "field": "dimensions", "type": "array", "required": true, "values": "objects: no_of_box, length, width, height", "notes": "" }
+    ]
+  },
+  "createWarehouse": {
+    "title": "Create Warehouse",
+    "fields": [
+      { "field": "address_title", "type": "string", "required": true, "values": "—", "notes": "Must be unique; reusing title returns existing warehouse_id" },
+      { "field": "name, phone, alternate_phone, email", "type": "—", "required": false, "values": "—", "notes": "" },
+      { "field": "address_line_one", "type": "string", "required": true, "values": "—", "notes": "" },
+      { "field": "address_line_two", "type": "string", "required": false, "values": "—", "notes": "" },
+      { "field": "pin_code", "type": "number", "required": true, "values": "—", "notes": "" }
+    ]
+  },
+  "orderUpdateWarehouse": {
+    "title": "Order Update Warehouse",
+    "fields": [
+      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "" },
+      { "field": "warehouse_id", "type": "int", "required": true, "values": "—", "notes": "" }
+    ]
+  },
+  "Login": {
+    "title": "Login",
+    "fields": [
+      { "field": "username", "type": "string", "required": true, "values": "—", "notes": "" },
+      { "field": "password", "type": "string", "required": true, "values": "—", "notes": "" }
+    ]
+  },
+  "getOrderLabel": {
+    "title": "Get Order Label",
+    "fields": [
+      { "field": "awb_number", "type": "string", "required": true, "values": "path param", "notes": "From Assign Courier or Schedule Pickup" }
+    ]
+  },
+  "trackOrder": {
+    "title": "Track Order",
+    "fields": [
+      { "field": "awb_number", "type": "string", "required": true, "values": "query param", "notes": "From Assign Courier or Schedule Pickup" }
+    ]
+  },
+  "getOrderDetail": {
+    "title": "Get Order Detail",
+    "fields": [
+      { "field": "order_id", "type": "string", "required": true, "values": "query param", "notes": "" }
+    ]
+  },
+  "pincodeServiceability": {
+    "title": "Pincode Serviceability",
+    "fields": [
+      { "field": "pickup_pincode", "type": "number", "required": true, "values": "—", "notes": "" },
+      { "field": "delivery_pincode", "type": "number", "required": true, "values": "—", "notes": "" }
+    ]
+  },
+  "internationalPushOrder": {
+    "title": "International Push Order",
+    "placeholder": true,
+    "partialNotice": true,
+    "fields": [
+      { "field": "type_of_package", "type": "string", "required": true, "values": "SPS, B2B, MPS", "notes": "" },
+      { "field": "shipment_purpose", "type": "string", "required": true, "values": "SCSB4, CSB5, DSCB4", "notes": "" },
+      { "field": "consignee_country_id", "type": "number", "required": true, "values": "from Countries API", "notes": "Do not hardcode" },
+      { "field": "currency", "type": "string", "required": true, "values": "INR (seen in examples)", "notes": "Full field list [PLACEHOLDER]" }
+    ]
+  },
+  "internationalRateCalculator": {
+    "title": "International Rate Calculator",
+    "placeholder": true,
+    "partialNotice": true,
+    "fields": []
+  },
+  "createShipper": {
+    "title": "Create Shipper",
+    "placeholder": true,
+    "fields": []
+  },
+  "Countries": {
+    "title": "Countries",
+    "placeholder": true,
+    "partialNotice": true,
+    "fields": []
+  },
+  "getAllNdrShipments": {
+    "title": "Get NDR Orders",
+    "placeholder": true,
+    "partialNotice": true,
+    "fields": []
+  },
+  "ndrOrderAction": {
+    "title": "NDR Action",
+    "placeholder": true,
+    "deferred": true,
+    "fields": []
+  },
+  "generateManifest": {
+    "title": "Generate Manifest",
+    "placeholder": true,
+    "partialNotice": true,
+    "fields": []
+  }
+}

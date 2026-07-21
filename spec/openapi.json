@@ -46,7 +46,17 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful operation"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "result": "1",
+                    "message": "Success",
+                    "data": "[PLACEHOLDER — needs live verification]"
+                  }
+                }
+              }
+            }
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
@@ -69,6 +79,100 @@
           "windowBehavior": "x-ratelimit-remaining only changes when Shipmozo sends a new HTTP response to you — it does not tick down on its own in the browser. Each API call lowers remaining by 1. After ~60 seconds, the next call you make usually shows remaining closer to 500 again (sliding window, not a live clock on the docs page).",
           "sharedQuota": true,
           "notes": "International orders reference data"
+        }
+      }
+    },
+    "/pincode-serviceability": {
+      "post": {
+        "tags": [
+          "Utility"
+        ],
+        "summary": "Pincode Serviceability",
+        "description": "Check whether a pickup-to-delivery pincode lane is serviceable before push-order.",
+        "operationId": "pincodeServiceability",
+        "parameters": [
+          {
+            "name": "public-key",
+            "in": "header",
+            "description": "Api Public Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "private-key",
+            "in": "header",
+            "description": "Api Private Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Pincode Serviceability Required Parameters",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "pickup_pincode": {
+                    "description": "Pickup Pincode",
+                    "type": "number",
+                    "example": 122018
+                  },
+                  "delivery_pincode": {
+                    "description": "Delivery Pincode",
+                    "type": "number",
+                    "example": 122001
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "result": "1",
+                    "message": "Success",
+                    "data": {
+                      "serviceable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "x-useCases": [
+          "Check lane before push-order at checkout"
+        ],
+        "security": [
+          {
+            "ApiKeyPublic": []
+          },
+          {
+            "ApiKeyPrivate": []
+          }
+        ],
+        "x-rateLimit": {
+          "limit": 500,
+          "remainingHeader": "x-ratelimit-remaining",
+          "limitHeader": "x-ratelimit-limit",
+          "window": "1 minute",
+          "windowSeconds": 60,
+          "windowBehavior": "x-ratelimit-remaining only changes when Shipmozo sends a new HTTP response to you — it does not tick down on its own in the browser. Each API call lowers remaining by 1. After ~60 seconds, the next call you make usually shows remaining closer to 500 again (sliding window, not a live clock on the docs page).",
+          "sharedQuota": true,
+          "notes": ""
         }
       }
     },
@@ -953,18 +1057,13 @@
         },
         "responses": {
           "200": {
-            "description": "Successful operation",
             "content": {
               "application/json": {
                 "schema": {
                   "example": {
                     "result": "1",
                     "message": "Success",
-                    "data": {
-                      "Info": "Order Pushed Successfully",
-                      "order_id": "ordID",
-                      "refrence_id": "ordID"
-                    }
+                    "data": "[PLACEHOLDER — needs live verification]"
                   }
                 }
               }
@@ -1657,7 +1756,17 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful operation"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "result": "1",
+                    "message": "Success",
+                    "data": "[PLACEHOLDER — needs live verification]"
+                  }
+                }
+              }
+            }
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
@@ -1749,7 +1858,17 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful operation"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "result": "1",
+                    "message": "Success",
+                    "data": "[PLACEHOLDER — needs live verification]"
+                  }
+                }
+              }
+            }
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
@@ -1888,7 +2007,17 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful operation"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "result": "1",
+                    "message": "Success",
+                    "data": "[PLACEHOLDER — needs live verification]"
+                  }
+                }
+              }
+            }
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
@@ -2169,7 +2298,17 @@
         },
         "responses": {
           "200": {
-            "description": "Successful operation"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "result": "1",
+                    "message": "Success",
+                    "data": "[PLACEHOLDER — needs live verification]"
+                  }
+                }
+              }
+            }
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
@@ -2228,7 +2367,23 @@
         },
         "responses": {
           "200": {
-            "description": "Successful operation"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "result": "1",
+                    "message": "Success",
+                    "data": [
+                      {
+                        "name": "Seller Name",
+                        "public_key": "YOUR_PUBLIC_KEY",
+                        "private_key": "YOUR_PRIVATE_KEY"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
@@ -2829,6 +2984,282 @@
         "action": "Use https://appiify.com/app/api/v1 without trailing slash"
       }
     ],
+    "navigation": {
+      "categories": [
+        {
+          "id": "start-connect",
+          "label": "Start & Connect",
+          "keywords": [
+            "start",
+            "connect",
+            "health",
+            "authentication",
+            "login"
+          ]
+        },
+        {
+          "id": "warehouses-pickup",
+          "label": "Warehouses & Pickup Setup",
+          "keywords": [
+            "warehouse",
+            "pickup",
+            "location"
+          ]
+        },
+        {
+          "id": "domestic-shipments",
+          "label": "Domestic Shipments",
+          "keywords": [
+            "domestic",
+            "forward",
+            "shipment",
+            "courier",
+            "rate",
+            "pickup"
+          ]
+        },
+        {
+          "id": "labels-tracking",
+          "label": "Labels & Tracking",
+          "keywords": [
+            "label",
+            "manifest",
+            "tracking",
+            "awb"
+          ]
+        },
+        {
+          "id": "returns",
+          "label": "Returns",
+          "keywords": [
+            "return",
+            "reverse",
+            "reason"
+          ]
+        },
+        {
+          "id": "international-shipments",
+          "label": "International Shipments",
+          "keywords": [
+            "international",
+            "country",
+            "shipper",
+            "export"
+          ]
+        },
+        {
+          "id": "order-management",
+          "label": "Order Management & Exceptions",
+          "keywords": [
+            "order",
+            "cancel",
+            "ndr",
+            "exception",
+            "detail"
+          ]
+        }
+      ],
+      "operations": {
+        "getApiInfo": {
+          "category": "start-connect",
+          "order": 10,
+          "keywords": [
+            "api version",
+            "health check"
+          ]
+        },
+        "Login": {
+          "category": "start-connect",
+          "order": 20,
+          "keywords": [
+            "credentials",
+            "api keys"
+          ]
+        },
+        "getWarehouses": {
+          "category": "warehouses-pickup",
+          "order": 10,
+          "keywords": [
+            "warehouse id",
+            "pickup address"
+          ]
+        },
+        "createWarehouse": {
+          "category": "warehouses-pickup",
+          "order": 20,
+          "keywords": [
+            "new warehouse",
+            "pickup location"
+          ]
+        },
+        "orderUpdateWarehouse": {
+          "category": "warehouses-pickup",
+          "order": 30,
+          "keywords": [
+            "change warehouse",
+            "order warehouse"
+          ]
+        },
+        "pushOrders": {
+          "category": "domestic-shipments",
+          "order": 10,
+          "keywords": [
+            "create order",
+            "forward order"
+          ]
+        },
+        "pincodeServiceability": {
+          "category": "domestic-shipments",
+          "order": 15,
+          "keywords": [
+            "pincode",
+            "serviceability",
+            "lane"
+          ]
+        },
+        "rateCalculator": {
+          "category": "domestic-shipments",
+          "order": 20,
+          "keywords": [
+            "rate",
+            "courier id",
+            "quote"
+          ]
+        },
+        "assignCourier": {
+          "category": "domestic-shipments",
+          "order": 30,
+          "keywords": [
+            "assign",
+            "courier",
+            "awb"
+          ]
+        },
+        "autoCourierAssign": {
+          "category": "domestic-shipments",
+          "order": 40,
+          "keywords": [
+            "auto assign",
+            "courier",
+            "awb"
+          ]
+        },
+        "schedulePickup": {
+          "category": "domestic-shipments",
+          "order": 50,
+          "keywords": [
+            "schedule",
+            "pickup"
+          ]
+        },
+        "getOrderLabel": {
+          "category": "labels-tracking",
+          "order": 10,
+          "keywords": [
+            "shipping label",
+            "awb"
+          ]
+        },
+        "generateManifest": {
+          "category": "labels-tracking",
+          "order": 20,
+          "keywords": [
+            "manifest",
+            "bulk awb"
+          ]
+        },
+        "trackOrder": {
+          "category": "labels-tracking",
+          "order": 30,
+          "keywords": [
+            "track",
+            "tracking status",
+            "awb"
+          ]
+        },
+        "getReturnReason": {
+          "category": "returns",
+          "order": 10,
+          "keywords": [
+            "return reason",
+            "reverse shipment"
+          ]
+        },
+        "pushReturnOrder": {
+          "category": "returns",
+          "order": 20,
+          "keywords": [
+            "return order",
+            "reverse pickup"
+          ]
+        },
+        "Countries": {
+          "category": "international-shipments",
+          "order": 10,
+          "keywords": [
+            "countries",
+            "international"
+          ]
+        },
+        "createShipper": {
+          "category": "international-shipments",
+          "order": 20,
+          "keywords": [
+            "shipper",
+            "exporter"
+          ]
+        },
+        "internationalRateCalculator": {
+          "category": "international-shipments",
+          "order": 30,
+          "keywords": [
+            "international rate",
+            "export quote"
+          ]
+        },
+        "internationalPushOrder": {
+          "category": "international-shipments",
+          "order": 40,
+          "keywords": [
+            "international order",
+            "export shipment"
+          ]
+        },
+        "getOrderDetail": {
+          "category": "order-management",
+          "order": 10,
+          "keywords": [
+            "order detail",
+            "order status"
+          ]
+        },
+        "cancelOrder": {
+          "category": "order-management",
+          "order": 20,
+          "keywords": [
+            "cancel",
+            "cancel shipment"
+          ]
+        },
+        "getAllNdrShipments": {
+          "category": "order-management",
+          "order": 30,
+          "keywords": [
+            "ndr",
+            "non delivery"
+          ]
+        },
+        "ndrOrderAction": {
+          "category": "order-management",
+          "order": 40,
+          "keywords": [
+            "ndr action",
+            "reattempt",
+            "rto"
+          ]
+        }
+      }
+    },
     "workflows": [
       {
         "id": "forward-standard",
@@ -2837,8 +3268,8 @@
           "POST /login — store public-key & private-key",
           "POST /create-warehouse — only if no warehouse exists yet or have to use a new warehouse",
           "GET /get-warehouses — list warehouses and confirm warehouse_id to use",
-          "POST /rate-calculator — choose courier_id",
           "POST /push-order — create order in panel",
+          "POST /rate-calculator — choose courier_id",
           "POST /assign-courier — assign courier & get AWB",
           "If pickups_automatically_scheduled = NO → POST /schedule-pickup",
           "GET /get-order-label/{awb_number} — shipping label",
@@ -3095,6 +3526,15 @@
         "auth": false,
         "limit": 500,
         "notes": "Cache keys after success; do not poll login"
+      },
+      {
+        "operationId": "pincodeServiceability",
+        "method": "POST",
+        "path": "/pincode-serviceability",
+        "tag": "Utility",
+        "auth": true,
+        "limit": 500,
+        "notes": ""
       },
       {
         "operationId": "rateCalculator",

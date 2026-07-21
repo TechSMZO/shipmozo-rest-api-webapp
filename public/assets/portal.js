@@ -1,3 +1,15 @@
+import {
+  renderModeToggle,
+  getSavedTesterMode,
+  saveTesterMode,
+  renderWorkflowPanel,
+  bindWorkflowPanel,
+  loadWorkflowContext,
+} from "./workflow-tester.js";
+import { lifecycleWorkflow } from "./lifecycle-workflow.js";
+import { loadFieldContracts, renderFieldContract, renderFieldContractCollapsible } from "./field-contract-renderer.js";
+import { renderDemoPage, bindDemoPage } from "./demo-player.js";
+
 const API_BACKENDS = {
   dev: { label: "Dev server", baseUrl: "https://appiify.com/app/api/v1" },
   live: { label: "Live server", baseUrl: "https://shipping-api.com/app/api/v1" },
@@ -44,6 +56,9 @@ function renderPostmanActions(compact = false) {
 let spec = null;
 let portalMeta = null;
 let operations = [];
+let fieldContracts = null;
+let fieldHints = null;
+let scenarios = null;
 let credentialsByEnv = {
   dev: { publicKey: "", privateKey: "" },
   live: { publicKey: "", privateKey: "" },
@@ -76,6 +91,7 @@ function saveBackend(env) {
   applyActiveCredentials();
   syncBackendUI();
   syncAuthUI();
+  refreshAuthStatusFromKeys();
   $("#authUsername") && ($("#authUsername").value = "");
   $("#authPassword") && ($("#authPassword").value = "");
   $("#authLoginMsg") && ($("#authLoginMsg").textContent = "");
@@ -128,11 +144,11 @@ async function fetchJson(url, options) {
 }
 
 function getActiveCredentials() {
-  const pub = $("#authPublicKey")?.value?.trim();
-  const priv = $("#authPrivateKey")?.value?.trim();
+  const pubInput = $("#authPublicKey")?.value?.trim();
+  const privInput = $("#authPrivateKey")?.value?.trim();
   return {
-    publicKey: pub || credentials.publicKey,
-    privateKey: priv || credentials.privateKey,
+    publicKey: pubInput || credentials.publicKey,
+    privateKey: privInput || credentials.privateKey,
   };
 }
 
@@ -224,8 +240,17 @@ function loadCredentials() {
     dev: { publicKey: "", privateKey: "" },
     live: { publicKey: "", privateKey: "" },
   };
+  let migratedFromSession = false;
   try {
-    const raw = localStorage.getItem(AUTH_STORAGE);
+    let raw = localStorage.getItem(AUTH_STORAGE);
+    if (!raw) {
+      try {
+        raw = sessionStorage.getItem(AUTH_STORAGE);
+        if (raw) migratedFromSession = true;
+      } catch {
+        /* ignore */
+      }
+    }
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed.dev || parsed.live) {
@@ -238,6 +263,14 @@ function loadCredentials() {
         };
         credentialsByEnv.dev = { ...legacy };
         credentialsByEnv.live = { ...legacy };
+      }
+      if (migratedFromSession) {
+        try {
+          localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
+          sessionStorage.removeItem(AUTH_STORAGE);
+        } catch {
+          /* ignore */
+        }
       }
     }
   } catch {
@@ -270,9 +303,9 @@ function syncAuthUI(accountHint) {
   const status = $("#authStatus");
   const pub = $("#authPublicKey");
   const priv = $("#authPrivateKey");
-  if (pub) pub.value = credentials.publicKey;
-  if (priv) priv.value = credentials.privateKey;
   const active = getActiveCredentials();
+  if (pub) pub.value = active.publicKey;
+  if (priv) priv.value = active.privateKey;
   status.classList.remove("connected", "pending");
 
   if (active.publicKey && active.privateKey) {
@@ -307,7 +340,12 @@ function interpretShipmozoResponse(payload) {
   const msg = message.toLowerCase();
   const failureReason = payload.data?.error || message || "The API returned result 0.";
   if (payload.result === "1" || payload.result === 1) {
-    return { type: "ok", title: "✅ Success", text: message || "Request succeeded." };
+    const genericSuccess = !message || /^success\.?$/i.test(message.trim());
+    return {
+      type: "ok",
+      title: "✅ Success",
+      text: genericSuccess ? "Request succeeded." : message,
+    };
   }
   if (msg.includes("under verification") || msg.includes("profile is under")) {
     return {
@@ -328,6 +366,13 @@ function interpretShipmozoResponse(payload) {
     title: `❌ Failed: ${failureReason}`,
     text: "HTTP status can still be 200 — check result, then data.error or message.",
   };
+}
+
+async function refreshAuthStatusFromKeys() {
+  const active = getActiveCredentials();
+  if (!active.publicKey || !active.privateKey) return;
+  const accountState = await probeAccountStatus();
+  syncAuthUI(accountState === "verified" ? "verified" : accountState === "pending" ? "pending" : undefined);
 }
 
 async function probeAccountStatus() {
@@ -374,6 +419,48 @@ function authHeaders() {
   return h;
 }
 
+function getWorkflowCategories() {
+  const configured = portalMeta?.navigation?.categories || [];
+  return [
+    ...configured.map((category, index) => ({ ...category, order: index })),
+    { id: "other-apis", label: "Other APIs", keywords: [], order: Number.MAX_SAFE_INTEGER },
+  ];
+}
+
+function getWorkflowGroups(items = operations) {
+  const categories = getWorkflowCategories();
+  const categoriesById = new Map(categories.map((category) => [category.id, category]));
+  const grouped = new Map(categories.map((category) => [category.id, []]));
+
+  items.forEach((item) => {
+    const categoryId = categoriesById.has(item.workflowCategoryId) ? item.workflowCategoryId : "other-apis";
+    grouped.get(categoryId).push(item);
+  });
+
+  return categories
+    .map((category) => ({
+      ...category,
+      items: (grouped.get(category.id) || []).sort(
+        (a, b) => a.workflowOrder - b.workflowOrder || a.summary.localeCompare(b.summary)
+      ),
+    }))
+    .filter((category) => category.items.length);
+}
+
+function matchesWorkflowSearch(item, query) {
+  if (!query) return true;
+  return [
+    item.method,
+    item.path,
+    item.summary,
+    item.workflowCategoryLabel,
+    ...(item.workflowKeywords || []),
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(query);
+}
+
 async function loadSpec() {
   let lastError;
   for (const url of SPEC_URLS) {
@@ -382,10 +469,14 @@ async function loadSpec() {
       if (!data?.paths) throw new Error("Spec missing paths");
       spec = data;
       portalMeta = spec["x-portal"] || {};
+      const categoryById = new Map(getWorkflowCategories().map((category) => [category.id, category]));
+      const operationNavigation = portalMeta.navigation?.operations || {};
       operations = [];
       for (const [pathKey, methods] of Object.entries(spec.paths || {})) {
         for (const [method, op] of Object.entries(methods)) {
           if (["get", "post", "put", "patch", "delete"].includes(method)) {
+            const navigation = operationNavigation[op.operationId] || {};
+            const category = categoryById.get(navigation.category) || categoryById.get("other-apis");
             operations.push({
               id: `${method}-${pathKey}`.replace(/[{}]/g, ""),
               method: method.toUpperCase(),
@@ -393,10 +484,20 @@ async function loadSpec() {
               op,
               tag: (op.tags && op.tags[0]) || "Other",
               summary: op.summary || pathKey,
+              workflowCategoryId: category.id,
+              workflowCategoryLabel: category.label,
+              workflowKeywords: [...(category.keywords || []), ...(navigation.keywords || [])],
+              workflowOrder: navigation.order ?? Number.MAX_SAFE_INTEGER,
             });
           }
         }
       }
+      operations.sort((a, b) => {
+        const categoryDifference =
+          (categoryById.get(a.workflowCategoryId)?.order ?? Number.MAX_SAFE_INTEGER) -
+          (categoryById.get(b.workflowCategoryId)?.order ?? Number.MAX_SAFE_INTEGER);
+        return categoryDifference || a.workflowOrder - b.workflowOrder || a.summary.localeCompare(b.summary);
+      });
       return;
     } catch (e) {
       lastError = new Error(`${url}: ${e.message}`);
@@ -600,22 +701,30 @@ function formatRateLimitLine(op) {
 function renderRateLimitByEndpointTable() {
   const rows = portalMeta.rateLimitsByEndpoint || [];
   if (!rows.length) return "";
-  return `<table class="rate-api-table">
+  const rowsByOperationId = new Map(rows.map((row) => [row.operationId, row]));
+  const renderTable = (items) => `<table class="rate-api-table">
     <thead><tr><th>Method</th><th>Path</th><th>Limit</th><th>Auth</th><th>Notes</th></tr></thead>
     <tbody>
-      ${rows
+      ${items
         .map(
-          (r) => `<tr>
-          <td><span class="method-badge method-${r.method}">${r.method}</span></td>
-          <td><code>${esc(r.path)}</code></td>
-          <td><strong>${r.limit}</strong> <span class="muted small">(shared)</span></td>
-          <td>${r.auth ? "Keys" : "—"}</td>
-          <td class="muted small">${esc(r.notes || "")}</td>
+          (item) => {
+            const row = rowsByOperationId.get(item.op.operationId) || {};
+            return `<tr>
+          <td><span class="method-badge method-${item.method}">${item.method}</span></td>
+          <td><code>${esc(item.path)}</code></td>
+          <td><strong>${esc(String(row.limit ?? 500))}</strong> <span class="muted small">(shared)</span></td>
+          <td>${needsAuth(item.op) ? "Keys" : "—"}</td>
+          <td class="muted small">${esc(row.notes || "")}</td>
         </tr>`
+          }
         )
         .join("")}
     </tbody>
   </table>`;
+
+  return getWorkflowGroups()
+    .map((category) => `<h3 class="rate-category-title">${esc(category.label)}</h3>${renderTable(category.items)}`)
+    .join("");
 }
 
 function renderStaticIntro() {
@@ -632,6 +741,7 @@ function renderStaticIntro() {
       <div class="hero-actions">
         <button type="button" class="btn-primary" id="heroConnectBtn">${connected ? "Manage API keys" : "Connect API keys"}</button>
         <a href="#/execute" class="btn-secondary">Open API Tester</a>
+        <a href="#/demo" class="btn-secondary">Run Demo</a>
         ${renderPostmanActions(true)}
       </div>
       ${
@@ -691,7 +801,7 @@ function renderStaticIntro() {
               .join("")}</tbody></table>`
           : ""
       }
-      <p style="margin-top:16px"><a href="#/rate-limits">Per-API rate limit table →</a> · <a href="#/errors">Error codes →</a></p>
+      <p style="margin-top:16px"><a href="#/errors">Error codes →</a></p>
     </div>
 
     <div class="section">
@@ -738,6 +848,17 @@ function renderAuthPage() {
     <div class="note"><strong>Security:</strong> Never expose <code>private-key</code> in front-end apps or mobile clients. Call Shipmozo from your backend only.</div>`;
 }
 
+function renderWorkflowStep(step) {
+  const targets = operations.filter((operation) => step.includes(operation.path));
+  const links = targets
+    .map(
+      (operation) =>
+        `<a href="#/execute?op=${encodeURIComponent(operation.id)}">Open ${esc(operation.summary)} in API Tester</a>`
+    )
+    .join(" · ");
+  return `<li><code>${esc(step)}</code>${links ? `<span class="workflow-step-links">${links}</span>` : ""}</li>`;
+}
+
 function renderWorkflows() {
   const flows = portalMeta.workflows || [];
   return `
@@ -749,7 +870,7 @@ function renderWorkflows() {
       <div class="section flow-card">
         <h2>${esc(f.title)}</h2>
         <ol class="flow-steps">
-          ${f.steps.map((s) => `<li><code>${esc(s)}</code></li>`).join("")}
+          ${f.steps.map(renderWorkflowStep).join("")}
         </ol>
       </div>`
       )
@@ -813,7 +934,7 @@ function renderErrors() {
   return `
     <h1 class="page-title">Error codes &amp; troubleshooting</h1>
     <p class="page-lead">Shipmozo returns HTTP 200 with <code>result: "0"</code> for business errors. Use <code>message</code> and <code>data.error</code> for details.</p>
-    <p><a href="#/rate-limits">View all API rate limits →</a></p>
+    
 
     <div class="section">
       <h2>Error reference</h2>
@@ -948,6 +1069,7 @@ function renderEndpoint(item) {
       </div>
 
       <p style="margin-top:24px"><a href="#/execute?op=${encodeURIComponent(item.id)}" class="btn-primary inline-btn">Test this API →</a></p>
+      ${renderFieldContract(op.operationId, fieldContracts)}
     </article>`;
 }
 
@@ -971,54 +1093,95 @@ const TESTER_UNIT_FACTS = {
 
 const TESTER_PREREQS = {
   "/push-order": {
-    text: "You'll need: warehouse_id (from Get Warehouses).",
-    opId: "get-/get-warehouses",
-    label: "Get Warehouses",
+    text: 'Needs a valid warehouse_id. Get one from Get Warehouses (use the one with default: YES).',
+    links: [{ opId: "get-/get-warehouses", label: "Get Warehouses" }],
   },
   "/push-return-order": {
-    text: "You'll need: warehouse_id (from Get Warehouses) and return_reason_id (from Get Return Reason).",
-    opId: "get-/get-warehouses",
-    label: "Get Warehouses",
+    text: "Needs a return_reason_id from Get Return Reason. Weight here is in kg (unlike Push Order, which uses grams).",
+    links: [
+      { opId: "get-/get-return-reason", label: "Get Return Reason" },
+      { opId: "get-/get-warehouses", label: "Get Warehouses" },
+    ],
   },
   "/assign-courier": {
-    text: "You'll need: courier_id (from Rate Calculator) and an existing order_id.",
-    opId: "post-/rate-calculator",
-    label: "Rate Calculator",
+    text: "Needs the internal order_id from Push Order's response, and a courier_id from Rate Calculator.",
+    links: [
+      { opId: "post-/push-order", label: "Push Order" },
+      { opId: "post-/rate-calculator", label: "Rate Calculator" },
+    ],
   },
   "/auto-assign-order": {
     text: "You'll need: an order created via Push Order first.",
-    opId: "post-/push-order",
-    label: "Push Order",
+    links: [{ opId: "post-/push-order", label: "Push Order" }],
   },
   "/schedule-pickup": {
-    text: "You'll need: an assigned shipment / AWB from Assign Courier.",
-    opId: "post-/assign-courier",
-    label: "Assign Courier",
+    text: "Only needed if the chosen courier's pickups_automatically_scheduled is NO in Rate Calculator. Otherwise the AWB is already assigned.",
+    links: [{ opId: "post-/rate-calculator", label: "Rate Calculator" }],
+  },
+  "/cancel-order": {
+    text: "Needs the internal order_id and the awb_number from Assign Courier.",
+    links: [{ opId: "post-/assign-courier", label: "Assign Courier" }],
   },
   "/get-order-label/{awb_number}": {
-    text: "You'll need: awb_number from Assign Courier (or order detail).",
-    opId: "post-/assign-courier",
-    label: "Assign Courier",
+    text: "Needs the awb_number from Assign Courier or Schedule Pickup.",
+    links: [
+      { opId: "post-/assign-courier", label: "Assign Courier" },
+      { opId: "post-/schedule-pickup", label: "Schedule Pickup" },
+    ],
   },
   "/track-order": {
-    text: "You'll need: awb_number or order identifiers from a pushed/assigned shipment.",
-    opId: "post-/push-order",
-    label: "Push Order",
+    text: "Needs the awb_number from Assign Courier or Schedule Pickup.",
+    links: [
+      { opId: "post-/assign-courier", label: "Assign Courier" },
+      { opId: "post-/schedule-pickup", label: "Schedule Pickup" },
+    ],
   },
   "/order/update-warehouse": {
-    text: "You'll need: warehouse_id from Get Warehouses or Create Warehouse.",
-    opId: "get-/get-warehouses",
-    label: "Get Warehouses",
+    text: "Needs the internal order_id from Push Order and a warehouse_id from Get Warehouses.",
+    links: [
+      { opId: "post-/push-order", label: "Push Order" },
+      { opId: "get-/get-warehouses", label: "Get Warehouses" },
+    ],
   },
 };
 
-const OPTGROUP_ORDER = [
-  { key: "Orders", label: "Orders", tags: ["Orders"] },
-  { key: "Tracking", label: "Tracking", tags: ["Track", "Label"] },
-  { key: "Warehouse", label: "Warehouse", tags: ["Warehouse"] },
-  { key: "Utility", label: "Utility", tags: ["Utility", "Common"] },
-  { key: "Auth", label: "Auth", tags: [] },
-];
+function renderPrereqHtml(prereq) {
+  if (!prereq) return "";
+  const links = (prereq.links || (prereq.opId ? [{ opId: prereq.opId, label: prereq.label }] : []))
+    .map((link) => `<a href="#/execute?op=${encodeURIComponent(link.opId)}">${esc(link.label)}</a>`)
+    .join(" · ");
+  return `${esc(prereq.text)}${links ? ` ${links}` : ""}`;
+}
+
+function getFieldHint(path, fieldName) {
+  if (!fieldHints) return "";
+  return fieldHints[`${path}.${fieldName}`] || fieldHints[`${path}.${fieldName.split(".").pop()}`] || "";
+}
+
+async function loadPortalAssets() {
+  fieldContracts = await loadFieldContracts();
+  try {
+    const [hintsRes, scenariosRes] = await Promise.all([
+      fetch("/assets/field-hints.json"),
+      fetch("/assets/scenarios.json"),
+    ]);
+    fieldHints = await hintsRes.json();
+    scenarios = await scenariosRes.json();
+  } catch {
+    fieldHints = fieldHints || {};
+    scenarios = scenarios || {};
+  }
+}
+
+function workflowApiDeps() {
+  return {
+    proxyRequest,
+    authHeaders,
+    getActiveCredentials,
+    interpretShipmozoResponse,
+    toast,
+  };
+}
 
 function getJourney() {
   try {
@@ -1086,40 +1249,18 @@ function renderJourneyStrip() {
   return `<nav class="journey-strip" aria-label="Integration progress">${parts.join("")}</nav>`;
 }
 
-function testerGroupForOp(o) {
-  if (o.path === "/login") return "Auth";
-  for (const g of OPTGROUP_ORDER) {
-    if (g.tags.includes(o.tag)) return g.key;
-  }
-  return "Utility";
-}
-
 function renderTesterOpOptions(preselectId) {
-  const preferredFirst = "post-/push-order";
-  const groups = Object.fromEntries(OPTGROUP_ORDER.map((g) => [g.key, []]));
-  operations.forEach((o) => {
-    const g = testerGroupForOp(o);
-    if (!groups[g]) groups[g] = [];
-    groups[g].push(o);
-  });
-  if (groups.Orders?.length) {
-    groups.Orders.sort((a, b) => {
-      if (a.id === preferredFirst) return -1;
-      if (b.id === preferredFirst) return 1;
-      return a.path.localeCompare(b.path);
-    });
-  }
-  return OPTGROUP_ORDER.map((g) => {
-    const list = groups[g.key] || [];
-    if (!list.length) return "";
-    const opts = list
+  return getWorkflowGroups()
+    .map((category) => {
+      const opts = category.items
       .map(
         (o) =>
           `<option value="${o.id}" ${o.id === preselectId ? "selected" : ""}>${o.method} ${o.path} — ${esc(o.summary)}</option>`
       )
       .join("");
-    return `<optgroup label="${esc(g.label)}">${opts}</optgroup>`;
-  }).join("");
+      return `<optgroup label="${esc(category.label)}">${opts}</optgroup>`;
+    })
+    .join("");
 }
 
 function renderTester(preselectId) {
@@ -1409,22 +1550,31 @@ async function copyText(text, label) {
 function renderPhase1Tester(preselectId) {
   const selectedId = resolveTesterOperationId(preselectId);
   const opts = renderTesterOpOptions(selectedId);
+  const mode = getSavedTesterMode();
+  const lifecycle = mode === "lifecycle";
 
   return `
-    <div class="tester-layout">
+    <div class="tester-layout" id="testerRoot">
       <h1 class="page-title">API Tester</h1>
       <p class="page-lead">Requests go through this portal's proxy to <code>${getApiBase()}</code> (<strong>${esc(getBackendLabel())}</strong>). The response body below is the exact Shipmozo API body.</p>
+      ${renderModeToggle(mode)}
       <div class="tester-safety-note"><strong>Dev requests run against a live sandbox:</strong> pushing an order creates a real order and AWB on your account. Cancel test orders when you're done. Dev and Live use separate keys.</div>
       ${renderJourneyStrip()}
 
+      <div id="singleModePanel" class="${lifecycle ? "hidden" : ""}">
       <div class="tester-grid">
         <div class="card tester-form" id="testerForm">
+          <label for="testerScenario">Load scenario</label>
+          <select id="testerScenario" aria-label="Load scenario"><option value="">— Choose a scenario —</option></select>
+          <p class="scenario-expected hidden" id="testerScenarioExpected"></p>
           <label for="testerOp">API endpoint</label>
           <select id="testerOp" aria-label="API endpoint">${opts}</select>
           <div id="testerPrereq" class="tester-prereq hidden"></div>
           <div id="testerUnitFacts" class="tester-unit-facts hidden"></div>
+          <div id="testerFieldContract"></div>
           <div id="testerParams"></div>
           <label for="testerBody">Request body (JSON)</label>
+          <div id="testerBodyHints" class="tester-body-hints hidden"></div>
           <textarea id="testerBody" rows="12" placeholder="{}" aria-label="Request body (JSON)"></textarea>
           <div id="testerEnumControls" class="tester-enum-controls hidden"></div>
           <div class="tester-actions">
@@ -1461,11 +1611,43 @@ function renderPhase1Tester(preselectId) {
           </div>
         </div>
       </div>
+      </div>
+
+      <div id="workflowModeMount" class="${lifecycle ? "" : "hidden"}">
+        ${lifecycle ? renderWorkflowPanel(lifecycleWorkflow, { ...loadWorkflowContext() }, {}, lifecycleWorkflow.steps[0].id) : ""}
+      </div>
     </div>`;
 }
 
 function bindPhase1Tester(preselectId) {
+  const root = $("#testerRoot") || $("#main");
+  const mode = getSavedTesterMode();
+
+  root.querySelectorAll('input[name="testerMode"]').forEach((radio) => {
+    radio.addEventListener("change", (e) => {
+      saveTesterMode(e.target.value);
+      const params = new URLSearchParams(location.hash.split("?")[1] || "");
+      if (e.target.value === "lifecycle") {
+        params.set("mode", "lifecycle");
+        location.hash = `#/execute?${params.toString()}`;
+      } else {
+        params.delete("mode");
+        const qs = params.toString();
+        location.hash = qs ? `#/execute?${qs}` : "#/execute";
+      }
+    });
+  });
+
+  if (mode === "lifecycle") {
+    bindWorkflowPanel(root, workflowApiDeps());
+    return;
+  }
+
   const opSelect = $("#testerOp");
+  const scenarioSelect = $("#testerScenario");
+  const scenarioExpected = $("#testerScenarioExpected");
+  const fieldContractEl = $("#testerFieldContract");
+  const bodyHintsEl = $("#testerBodyHints");
   const paramsDiv = $("#testerParams");
   const bodyTa = $("#testerBody");
   const hint = $("#testerAuthHint");
@@ -1617,7 +1799,7 @@ function bindPhase1Tester(preselectId) {
     const prereq = TESTER_PREREQS[item.path];
     if (prereq) {
       prereqEl.classList.remove("hidden");
-      prereqEl.innerHTML = `${esc(prereq.text)} <a href="#/execute?op=${encodeURIComponent(prereq.opId)}">Jump to ${esc(prereq.label)} →</a>`;
+      prereqEl.innerHTML = renderPrereqHtml(prereq);
     } else {
       prereqEl.classList.add("hidden");
       prereqEl.innerHTML = "";
@@ -1625,7 +1807,77 @@ function bindPhase1Tester(preselectId) {
     const facts = TESTER_UNIT_FACTS[item.path];
     unitFactsEl.classList.toggle("hidden", !facts);
     unitFactsEl.textContent = facts || "";
+    if (fieldContractEl) {
+      fieldContractEl.innerHTML = renderFieldContractCollapsible(item.op.operationId, fieldContracts);
+    }
+    if (bodyHintsEl && fieldHints) {
+      const hints = Object.entries(fieldHints)
+        .filter(([key]) => key.startsWith(`${item.path}.`))
+        .map(([key, text]) => {
+          const field = key.slice(item.path.length + 1);
+          return `<span class="field-hint-item"><code>${esc(field)}</code> — ${esc(text)}</span>`;
+        });
+      if (hints.length) {
+        bodyHintsEl.classList.remove("hidden");
+        bodyHintsEl.innerHTML = hints.join(" · ");
+      } else {
+        bodyHintsEl.classList.add("hidden");
+        bodyHintsEl.innerHTML = "";
+      }
+    }
     renderEnumControls(item);
+    populateScenarioSelect(item);
+  }
+
+  function populateScenarioSelect(item) {
+    if (!scenarioSelect) return;
+    const list = scenarios?.[item.id];
+    scenarioSelect.innerHTML = '<option value="">— Choose a scenario —</option>';
+    if (!list || !list.length) {
+      if (item.path.includes("international")) {
+        scenarioSelect.innerHTML += '<option value="" disabled>Coming soon — insufficient verified field data</option>';
+      }
+      scenarioExpected?.classList.add("hidden");
+      return;
+    }
+    list.forEach((scenario, index) => {
+      const opt = document.createElement("option");
+      opt.value = String(index);
+      opt.textContent = scenario.label;
+      scenarioSelect.appendChild(opt);
+    });
+    scenarioExpected?.classList.add("hidden");
+  }
+
+  function applyScenario(index) {
+    const item = currentOp();
+    const list = scenarios?.[item?.id];
+    const scenario = list?.[Number(index)];
+    if (!scenario) {
+      scenarioExpected?.classList.add("hidden");
+      return;
+    }
+    if (scenario.body) bodyTa.value = JSON.stringify(scenario.body, null, 2);
+    if (scenario.params) {
+      Object.entries(scenario.params).forEach(([name, value]) => {
+        const input = paramsDiv.querySelector(`input[data-param="${name}"]`);
+        if (input) input.value = value;
+      });
+    }
+    syncEnumControlsFromBody();
+    if (scenarioExpected) {
+      scenarioExpected.classList.remove("hidden");
+      scenarioExpected.textContent = `Expected: ${scenario.expected || "See API response"}`;
+    }
+  }
+
+  function appendFieldHint(labelEl, path, fieldName) {
+    const hintText = getFieldHint(path, fieldName);
+    if (!hintText) return;
+    const span = document.createElement("span");
+    span.className = "field-hint";
+    span.textContent = hintText;
+    labelEl.appendChild(span);
   }
 
   function fillForm() {
@@ -1637,6 +1889,7 @@ function bindPhase1Tester(preselectId) {
       .forEach((parameter) => {
         const label = document.createElement("label");
         label.textContent = `${parameter.name} (${parameter.in})${parameter.required ? " *" : ""}`;
+        appendFieldHint(label, item.path, parameter.name);
         const input = document.createElement("input");
         input.dataset.param = parameter.name;
         input.dataset.in = parameter.in;
@@ -1689,6 +1942,8 @@ function bindPhase1Tester(preselectId) {
     const item = currentOp();
     if (item) history.replaceState(null, "", `#/execute?op=${encodeURIComponent(item.id)}`);
   });
+
+  scenarioSelect?.addEventListener("change", () => applyScenario(scenarioSelect.value));
 
   $("#testerRun").addEventListener("click", async () => {
     const { item, path } = buildPathAndQuery();
@@ -1788,19 +2043,13 @@ function buildSidebar(filter = "") {
         { href: "#/", label: "Overview" },
         { href: "#/auth", label: "Authentication" },
         { href: "#/workflows", label: "Integration flows" },
-        { href: "#/rate-limits", label: "Rate limits" },
         { href: "#/errors", label: "Error codes" },
         { href: "#/best-practices", label: "Best practices" },
       ],
     },
   ];
 
-  const byTag = {};
-  operations.forEach((o) => {
-    if (q && !`${o.method} ${o.path} ${o.summary}`.toLowerCase().includes(q)) return;
-    if (!byTag[o.tag]) byTag[o.tag] = [];
-    byTag[o.tag].push(o);
-  });
+  const workflowGroups = getWorkflowGroups(operations.filter((operation) => matchesWorkflowSearch(operation, q)));
 
   let html = "";
   staticGroups.forEach((g) => {
@@ -1813,22 +2062,9 @@ function buildSidebar(filter = "") {
 
   html += `<div class="nav-group"><div class="nav-group-title">Tools</div><a class="nav-link" href="#/execute">API Tester</a></div>`;
 
-  const tagOrder = ["Common", "Warehouse", "Orders", "Track", "Label", "Utility"];
-  const tags = [...new Set([...tagOrder, ...Object.keys(byTag)])];
-  tags.forEach((tag) => {
-    if (!byTag[tag]?.length) return;
-    html += `<div class="nav-group"><div class="nav-group-title">${esc(tag)}</div>`;
-    const items = [...byTag[tag]];
-    if (tag === "Orders") {
-      const rateCalculator = operations.find((operation) => operation.path === "/rate-calculator");
-      const rateCalculatorMatchesFilter =
-        !q || `${rateCalculator?.method} ${rateCalculator?.path} ${rateCalculator?.summary}`.toLowerCase().includes(q);
-      const assignCourierIndex = items.findIndex((operation) => operation.path === "/assign-courier");
-      if (rateCalculator && rateCalculatorMatchesFilter && assignCourierIndex >= 0) {
-        items.splice(assignCourierIndex, 0, rateCalculator);
-      }
-    }
-    items.forEach((o) => {
+  workflowGroups.forEach((category) => {
+    html += `<div class="nav-group"><div class="nav-group-title">${esc(category.label)}</div>`;
+    category.items.forEach((o) => {
       html += `<a class="nav-link" href="#/api/${o.id}"><span class="method method-${o.method}">${o.method}</span>${esc(o.summary)}</a>`;
     });
     html += `</div>`;
@@ -1850,8 +2086,7 @@ function setActiveNav() {
       (nav === "execute" && h === "#/execute") ||
         (nav === "workflows" && h === "#/workflows") ||
         (nav === "errors" && h === "#/errors") ||
-        (nav === "rate-limits" && h === "#/rate-limits") ||
-        (nav === "docs" && !["#/execute", "#/workflows", "#/errors", "#/rate-limits"].includes(h))
+        (nav === "docs" && !["#/execute", "#/workflows", "#/errors"].includes(h))
     );
   });
 }
@@ -1867,9 +2102,21 @@ async function route() {
   setActiveNav();
 
   if (hash.startsWith("#/execute")) {
-    const op = new URLSearchParams(hash.split("?")[1] || "").get("op");
+    const query = hash.split("?")[1] || "";
+    const params = new URLSearchParams(query);
+    const op = params.get("op");
+    if (params.get("mode") === "lifecycle") {
+      saveTesterMode("lifecycle");
+    } else if (params.has("op")) {
+      saveTesterMode("single");
+    }
     main.innerHTML = renderPhase1Tester(op);
     bindPhase1Tester(op);
+    return;
+  }
+  if (hash.startsWith("#/demo")) {
+    main.innerHTML = renderDemoPage();
+    bindDemoPage();
     return;
   }
   if (hash === "#/" || hash === "#") {
@@ -1888,8 +2135,7 @@ async function route() {
     return;
   }
   if (hash === "#/rate-limits") {
-    main.innerHTML = renderRateLimitsPage();
-    bindLiveRateLimit(main);
+    location.hash = "#/";
     return;
   }
   if (hash === "#/errors") {
@@ -2039,8 +2285,10 @@ async function init() {
   syncBackendUI();
   bindAuthDialog();
   bindBackendSwitch();
+  refreshAuthStatusFromKeys();
   try {
     await loadSpec();
+    await loadPortalAssets();
     $("#loading")?.remove();
     buildSidebar();
     $("#searchInput").addEventListener("input", (e) => buildSidebar(e.target.value));
