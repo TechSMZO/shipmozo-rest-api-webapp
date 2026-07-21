@@ -1,0 +1,22 @@
+{
+  "/push-order.weight": "grams",
+  "/push-order.length": "cm",
+  "/push-order.width": "cm",
+  "/push-order.height": "cm",
+  "/push-order.order_date": "Format: YYYY-MM-DD",
+  "/push-order.consignee_phone": "Digits only, no country code",
+  "/push-order.consignee_alternate_phone": "Digits only, no country code",
+  "/push-order.product_detail.product_category": "Free text — any value accepted",
+  "/rate-calculator.weight": "grams",
+  "/rate-calculator.dimensions.length": "cm",
+  "/rate-calculator.dimensions.width": "cm",
+  "/rate-calculator.dimensions.height": "cm",
+  "/push-return-order.weight": "kg (not grams — differs from Push Order)",
+  "/push-return-order.length": "cm",
+  "/push-return-order.width": "cm",
+  "/push-return-order.height": "cm",
+  "/push-return-order.order_date": "Format: YYYY-MM-DD",
+  "/push-return-order.pickup_phone": "Digits only, no country code",
+  "/international-push-order.order_date": "Format: YYYY-MM-DD",
+  "/international-push-order.consignee_phone": "Digits only, no country code"
+}

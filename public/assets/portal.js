@@ -1,8 +1,22 @@
+import {
+  renderModeToggle,
+  getSavedTesterMode,
+  saveTesterMode,
+  renderWorkflowPanel,
+  bindWorkflowPanel,
+  loadWorkflowContext,
+  loadLifecycleScenarioId,
+  getLifecycleWorkflow,
+} from "./workflow-tester.js?v=32";
+import { loadFieldContracts, renderFieldContract, renderFieldContractCollapsible } from "./field-contract-renderer.js?v=32";
+import { renderDemoPage, bindDemoPage } from "./demo-player.js?v=32";
+
 const API_BACKENDS = {
   dev: { label: "Dev server", baseUrl: "https://appiify.com/app/api/v1" },
   live: { label: "Live server", baseUrl: "https://shipping-api.com/app/api/v1" },
 };
 const AUTH_STORAGE = "shipmozo_api_keys";
+const AUTH_CONNECTED_STORAGE = "shipmozo_api_connected";
 const BACKEND_STORAGE = "shipmozo_api_backend";
 /** Static file works even when a generic static server is used; /api/spec.json needs node server.js */
 const POSTMAN_ASSETS = {
@@ -44,10 +58,15 @@ function renderPostmanActions(compact = false) {
 let spec = null;
 let portalMeta = null;
 let operations = [];
+let fieldContracts = null;
+let fieldHints = null;
+let scenarios = null;
 let credentialsByEnv = {
   dev: { publicKey: "", privateKey: "" },
   live: { publicKey: "", privateKey: "" },
 };
+/** Per-env: true = use saved keys on requests; false = keys may exist but do not send until Connect. */
+let connectedByEnv = { dev: false, live: false };
 let credentials = credentialsByEnv.dev;
 let backendEnv = "dev";
 
@@ -57,6 +76,94 @@ function getApiBase() {
 
 function getBackendLabel() {
   return API_BACKENDS[backendEnv]?.label || "Dev server";
+}
+
+function getEnvShortLabel(env = backendEnv) {
+  return env === "live" ? "Live" : "Dev";
+}
+
+function hasKeysFor(env = backendEnv) {
+  const c = credentialsByEnv[env] || {};
+  return !!(c.publicKey && c.privateKey);
+}
+
+function isEnvConnected(env = backendEnv) {
+  return !!connectedByEnv[env] && hasKeysFor(env);
+}
+
+function persistConnectedFlags() {
+  try {
+    localStorage.setItem(AUTH_CONNECTED_STORAGE, JSON.stringify(connectedByEnv));
+  } catch {
+    /* ignore */
+  }
+}
+
+function setEnvConnected(env, connected) {
+  if (env !== "dev" && env !== "live") return;
+  connectedByEnv[env] = !!connected;
+  persistConnectedFlags();
+}
+
+function loadConnectedFlags() {
+  try {
+    const raw = localStorage.getItem(AUTH_CONNECTED_STORAGE);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      connectedByEnv = {
+        dev: !!parsed.dev,
+        live: !!parsed.live,
+      };
+      return;
+    }
+  } catch {
+    /* fall through to migrate */
+  }
+  // First load after this feature: if keys exist, treat as connected.
+  connectedByEnv = {
+    dev: hasKeysFor("dev"),
+    live: hasKeysFor("live"),
+  };
+  persistConnectedFlags();
+}
+
+function renderSandboxWarningNote() {
+  if (backendEnv === "live") {
+    return `<div class="note warn"><strong>Live API:</strong> Requests hit production (<code>shipping-api.com</code>). Orders and AWBs are real. <strong>Dev keys do not authorize on Live</strong> — sign in (or paste Live panel keys) while Live is selected.</div>`;
+  }
+  return `<div class="note warn"><strong>Dev sandbox:</strong> Dev requests run against a live sandbox. Pushing an order creates a real order and AWB on your account — cancel test orders when you're done. <strong>Live keys do not authorize on Dev</strong> — each server has its own key pair.</div>`;
+}
+
+function renderTesterSafetyNote() {
+  if (backendEnv === "live") {
+    return `<div class="tester-safety-note"><strong>Live requests hit production:</strong> pushing an order creates a real order and AWB. Dev keys will return <code>unauthorised user access</code> on Live — connect Live keys for this server.</div>`;
+  }
+  return `<div class="tester-safety-note"><strong>Dev requests run against a live sandbox:</strong> pushing an order creates a real order and AWB on your account. Cancel test orders when you're done. Each server needs its own API keys.</div>`;
+}
+
+function sameKeyPair(a, b) {
+  return !!(
+    a?.publicKey &&
+    a?.privateKey &&
+    b?.publicKey &&
+    b?.privateKey &&
+    a.publicKey === b.publicKey &&
+    a.privateKey === b.privateKey
+  );
+}
+
+/** Legacy storage copied one key pair into both slots; Live rejects Dev keys. */
+function scrubMirroredLiveKeys() {
+  if (!sameKeyPair(credentialsByEnv.dev, credentialsByEnv.live)) return false;
+  credentialsByEnv.live = { publicKey: "", privateKey: "" };
+  connectedByEnv.live = false;
+  try {
+    localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
+  } catch {
+    /* ignore */
+  }
+  persistConnectedFlags();
+  return true;
 }
 
 function loadBackend() {
@@ -76,6 +183,7 @@ function saveBackend(env) {
   applyActiveCredentials();
   syncBackendUI();
   syncAuthUI();
+  refreshAuthStatusFromKeys();
   $("#authUsername") && ($("#authUsername").value = "");
   $("#authPassword") && ($("#authPassword").value = "");
   $("#authLoginMsg") && ($("#authLoginMsg").textContent = "");
@@ -91,7 +199,14 @@ function syncBackendUI() {
 function bindBackendSwitch() {
   $("#backendEnv")?.addEventListener("change", (e) => {
     saveBackend(e.target.value);
-    toast(`Using ${getBackendLabel()} — ${getApiBase()}`, "info");
+    const env = getEnvShortLabel();
+    if (isEnvConnected(backendEnv)) {
+      toast(`Connected as ${env} — ${getApiBase()}`, "ok");
+    } else if (hasKeysFor(backendEnv)) {
+      toast(`${env} selected — keys saved, not connected`, "info");
+    } else {
+      toast(`Using ${getBackendLabel()} — connect keys to call the API`, "info");
+    }
     route();
   });
 }
@@ -128,11 +243,11 @@ async function fetchJson(url, options) {
 }
 
 function getActiveCredentials() {
-  const pub = $("#authPublicKey")?.value?.trim();
-  const priv = $("#authPrivateKey")?.value?.trim();
+  const pubInput = $("#authPublicKey")?.value?.trim();
+  const privInput = $("#authPrivateKey")?.value?.trim();
   return {
-    publicKey: pub || credentials.publicKey,
-    privateKey: priv || credentials.privateKey,
+    publicKey: pubInput || credentials.publicKey,
+    privateKey: privInput || credentials.privateKey,
   };
 }
 
@@ -224,20 +339,37 @@ function loadCredentials() {
     dev: { publicKey: "", privateKey: "" },
     live: { publicKey: "", privateKey: "" },
   };
+  let migratedFromSession = false;
   try {
-    const raw = localStorage.getItem(AUTH_STORAGE);
+    let raw = localStorage.getItem(AUTH_STORAGE);
+    if (!raw) {
+      try {
+        raw = sessionStorage.getItem(AUTH_STORAGE);
+        if (raw) migratedFromSession = true;
+      } catch {
+        /* ignore */
+      }
+    }
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed.dev || parsed.live) {
         if (parsed.dev) credentialsByEnv.dev = { ...credentialsByEnv.dev, ...parsed.dev };
         if (parsed.live) credentialsByEnv.live = { ...credentialsByEnv.live, ...parsed.live };
       } else if (parsed.publicKey !== undefined || parsed.privateKey !== undefined) {
-        const legacy = {
+        // Flat legacy blob was Dev-only; never mirror into Live (keys are not interchangeable).
+        credentialsByEnv.dev = {
           publicKey: parsed.publicKey || "",
           privateKey: parsed.privateKey || "",
         };
-        credentialsByEnv.dev = { ...legacy };
-        credentialsByEnv.live = { ...legacy };
+        credentialsByEnv.live = { publicKey: "", privateKey: "" };
+      }
+      if (migratedFromSession || (!parsed.dev && !parsed.live && (parsed.publicKey || parsed.privateKey))) {
+        try {
+          localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
+          if (migratedFromSession) sessionStorage.removeItem(AUTH_STORAGE);
+        } catch {
+          /* ignore */
+        }
       }
     }
   } catch {
@@ -247,57 +379,103 @@ function loadCredentials() {
     };
   }
   applyActiveCredentials();
+  loadConnectedFlags();
+  scrubMirroredLiveKeys();
+  applyActiveCredentials();
   syncAuthUI();
 }
 
 function saveCredentials() {
   persistCredentialsToStore();
+  setEnvConnected(backendEnv, hasKeysFor(backendEnv));
   syncAuthUI();
 }
 
-function clearCredentials() {
-  credentials = { publicKey: "", privateKey: "" };
-  credentialsByEnv[backendEnv] = { ...credentials };
-  try {
-    localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
-  } catch {
-    /* ignore */
-  }
+/** Disconnect current env: stop using keys for requests, but keep them saved. */
+function disconnectCurrentEnv() {
+  setEnvConnected(backendEnv, false);
   syncAuthUI();
+}
+
+/** Reconnect current env using keys already saved in the browser. */
+function connectCurrentEnv() {
+  if (!hasKeysFor(backendEnv)) return false;
+  setEnvConnected(backendEnv, true);
+  syncAuthUI();
+  return true;
+}
+
+function syncAuthActionButtons() {
+  const clearBtn = $("#authClearBtn");
+  if (!clearBtn) return;
+  const keys = hasKeysFor(backendEnv);
+  const connected = isEnvConnected(backendEnv);
+  if (connected) {
+    clearBtn.hidden = false;
+    clearBtn.disabled = false;
+    clearBtn.textContent = "Disconnect this server";
+    clearBtn.dataset.authAction = "disconnect";
+  } else if (keys) {
+    clearBtn.hidden = false;
+    clearBtn.disabled = false;
+    clearBtn.textContent = "Connect";
+    clearBtn.dataset.authAction = "connect";
+  } else {
+    clearBtn.hidden = true;
+    clearBtn.disabled = true;
+    clearBtn.textContent = "Disconnect this server";
+    clearBtn.dataset.authAction = "";
+  }
 }
 
 function syncAuthUI(accountHint) {
   const status = $("#authStatus");
   const pub = $("#authPublicKey");
   const priv = $("#authPrivateKey");
-  if (pub) pub.value = credentials.publicKey;
-  if (priv) priv.value = credentials.privateKey;
-  const active = getActiveCredentials();
-  status.classList.remove("connected", "pending");
+  const stored = credentialsByEnv[backendEnv] || { publicKey: "", privateKey: "" };
+  if (pub) pub.value = stored.publicKey || "";
+  if (priv) priv.value = stored.privateKey || "";
+  if (status) status.classList.remove("connected", "pending", "saved", "rejected");
 
-  if (active.publicKey && active.privateKey) {
+  const envTag = getEnvShortLabel();
+  const connected = isEnvConnected(backendEnv);
+  const keys = hasKeysFor(backendEnv);
+
+  if (!status) {
+    syncAuthActionButtons();
+    return;
+  }
+
+  if (accountHint === "unauthorized") {
+    status.textContent = `${envTag} — keys rejected`;
+    status.classList.add("rejected");
+    status.title = "These keys are not valid for this API server. Sign in while this server is selected.";
+  } else if (connected) {
     setJourney({ connected: true });
-    const envTag = getBackendLabel();
-    if (accountHint === "verified") {
-      status.textContent = `${envTag} · Ready`;
-      status.classList.add("connected");
-      status.title = "Keys saved — account active";
-    } else if (accountHint === "pending") {
-      status.textContent = `${envTag} · Pending`;
+    if (accountHint === "pending") {
+      status.textContent = `Connected as ${envTag} · Pending`;
       status.classList.add("pending");
       status.title = "Keys work, but Shipmozo profile is under verification";
     } else {
-      status.textContent = `${envTag} · Keys saved`;
+      status.textContent = `Connected as ${envTag}`;
       status.classList.add("connected");
-      status.title = `public-key: ${active.publicKey.slice(0, 10)}…`;
+      status.title =
+        accountHint === "verified"
+          ? "Keys saved — account active"
+          : `public-key: ${(stored.publicKey || "").slice(0, 10)}…`;
     }
-  } else if (active.publicKey || active.privateKey) {
-    status.textContent = `${getBackendLabel()} · Incomplete`;
+  } else if (keys) {
+    status.textContent = `${envTag} — keys saved, not connected`;
+    status.classList.add("saved");
+    status.title = "Keys are saved for this server. Click Connect to use them.";
+  } else if (stored.publicKey || stored.privateKey) {
+    status.textContent = `${envTag} — incomplete keys`;
     status.title = "Enter both public-key and private-key";
   } else {
     status.textContent = "Not connected";
     status.title = "Click Connect API";
   }
+  syncAuthActionButtons();
 }
 
 /** Explain Shipmozo result/message in plain language */
@@ -307,13 +485,25 @@ function interpretShipmozoResponse(payload) {
   const msg = message.toLowerCase();
   const failureReason = payload.data?.error || message || "The API returned result 0.";
   if (payload.result === "1" || payload.result === 1) {
-    return { type: "ok", title: "✅ Success", text: message || "Request succeeded." };
+    const genericSuccess = !message || /^success\.?$/i.test(message.trim());
+    return {
+      type: "ok",
+      title: "✅ Success",
+      text: genericSuccess ? "Request succeeded." : message,
+    };
   }
   if (msg.includes("under verification") || msg.includes("profile is under")) {
     return {
       type: "pending",
       title: "⏳ Account pending verification (not an API key issue)",
       text: "Your public-key and private-key are accepted, but Shipmozo has not activated your seller profile yet. Complete verification in the Shipmozo panel (KYC / documents). API calls will return result \"0\" until approval.",
+    };
+  }
+  if (msg.includes("unauthorised") || msg.includes("unauthorized")) {
+    return {
+      type: "unauthorized",
+      title: "❌ Failed: Keys not valid for this server",
+      text: "Dev and Live use different API key pairs. Sign in (or paste keys) while the matching API server is selected — Dev keys on Live return unauthorised.",
     };
   }
   if (msg.includes("invalid") && (msg.includes("key") || msg.includes("credential"))) {
@@ -330,6 +520,32 @@ function interpretShipmozoResponse(payload) {
   };
 }
 
+function accountHintFromProbe(accountState) {
+  if (accountState === "verified") return "verified";
+  if (accountState === "pending") return "pending";
+  if (accountState === "unauthorized") return "unauthorized";
+  return undefined;
+}
+
+async function refreshAuthStatusFromKeys() {
+  if (!isEnvConnected(backendEnv)) {
+    syncAuthUI();
+    return;
+  }
+  const accountState = await probeAccountStatus();
+  if (accountState === "unauthorized") {
+    // Stay disconnected so the badge cannot claim Connected while Live rejects Dev-copied keys.
+    setEnvConnected(backendEnv, false);
+    syncAuthUI("unauthorized");
+    toast(
+      `${getEnvShortLabel()} rejected these keys — sign in while ${getEnvShortLabel()} is selected`,
+      "error"
+    );
+    return;
+  }
+  syncAuthUI(accountHintFromProbe(accountState));
+}
+
 async function probeAccountStatus() {
   const headers = authHeaders();
   if (!headers["public-key"] || !headers["private-key"]) return null;
@@ -340,9 +556,10 @@ async function probeAccountStatus() {
       headers,
     });
     const payload = wrapped.data;
-    if (payload?.result === "1") return "verified";
+    if (payload?.result === "1" || payload?.result === 1) return "verified";
     const hint = interpretShipmozoResponse(payload);
     if (hint?.type === "pending") return "pending";
+    if (hint?.type === "unauthorized") return "unauthorized";
     return "unknown";
   } catch {
     return null;
@@ -367,11 +584,54 @@ async function loginWithPassword(username, password) {
 }
 
 function authHeaders() {
-  const c = getActiveCredentials();
+  if (!isEnvConnected(backendEnv)) return {};
+  const c = credentialsByEnv[backendEnv] || {};
   const h = {};
   if (c.publicKey) h["public-key"] = c.publicKey;
   if (c.privateKey) h["private-key"] = c.privateKey;
   return h;
+}
+
+function getWorkflowCategories() {
+  const configured = portalMeta?.navigation?.categories || [];
+  return [
+    ...configured.map((category, index) => ({ ...category, order: index })),
+    { id: "other-apis", label: "Other APIs", keywords: [], order: Number.MAX_SAFE_INTEGER },
+  ];
+}
+
+function getWorkflowGroups(items = operations) {
+  const categories = getWorkflowCategories();
+  const categoriesById = new Map(categories.map((category) => [category.id, category]));
+  const grouped = new Map(categories.map((category) => [category.id, []]));
+
+  items.forEach((item) => {
+    const categoryId = categoriesById.has(item.workflowCategoryId) ? item.workflowCategoryId : "other-apis";
+    grouped.get(categoryId).push(item);
+  });
+
+  return categories
+    .map((category) => ({
+      ...category,
+      items: (grouped.get(category.id) || []).sort(
+        (a, b) => a.workflowOrder - b.workflowOrder || a.summary.localeCompare(b.summary)
+      ),
+    }))
+    .filter((category) => category.items.length);
+}
+
+function matchesWorkflowSearch(item, query) {
+  if (!query) return true;
+  return [
+    item.method,
+    item.path,
+    item.summary,
+    item.workflowCategoryLabel,
+    ...(item.workflowKeywords || []),
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(query);
 }
 
 async function loadSpec() {
@@ -382,10 +642,14 @@ async function loadSpec() {
       if (!data?.paths) throw new Error("Spec missing paths");
       spec = data;
       portalMeta = spec["x-portal"] || {};
+      const categoryById = new Map(getWorkflowCategories().map((category) => [category.id, category]));
+      const operationNavigation = portalMeta.navigation?.operations || {};
       operations = [];
       for (const [pathKey, methods] of Object.entries(spec.paths || {})) {
         for (const [method, op] of Object.entries(methods)) {
           if (["get", "post", "put", "patch", "delete"].includes(method)) {
+            const navigation = operationNavigation[op.operationId] || {};
+            const category = categoryById.get(navigation.category) || categoryById.get("other-apis");
             operations.push({
               id: `${method}-${pathKey}`.replace(/[{}]/g, ""),
               method: method.toUpperCase(),
@@ -393,10 +657,20 @@ async function loadSpec() {
               op,
               tag: (op.tags && op.tags[0]) || "Other",
               summary: op.summary || pathKey,
+              workflowCategoryId: category.id,
+              workflowCategoryLabel: category.label,
+              workflowKeywords: [...(category.keywords || []), ...(navigation.keywords || [])],
+              workflowOrder: navigation.order ?? Number.MAX_SAFE_INTEGER,
             });
           }
         }
       }
+      operations.sort((a, b) => {
+        const categoryDifference =
+          (categoryById.get(a.workflowCategoryId)?.order ?? Number.MAX_SAFE_INTEGER) -
+          (categoryById.get(b.workflowCategoryId)?.order ?? Number.MAX_SAFE_INTEGER);
+        return categoryDifference || a.workflowOrder - b.workflowOrder || a.summary.localeCompare(b.summary);
+      });
       return;
     } catch (e) {
       lastError = new Error(`${url}: ${e.message}`);
@@ -600,28 +874,36 @@ function formatRateLimitLine(op) {
 function renderRateLimitByEndpointTable() {
   const rows = portalMeta.rateLimitsByEndpoint || [];
   if (!rows.length) return "";
-  return `<table class="rate-api-table">
+  const rowsByOperationId = new Map(rows.map((row) => [row.operationId, row]));
+  const renderTable = (items) => `<table class="rate-api-table">
     <thead><tr><th>Method</th><th>Path</th><th>Limit</th><th>Auth</th><th>Notes</th></tr></thead>
     <tbody>
-      ${rows
+      ${items
         .map(
-          (r) => `<tr>
-          <td><span class="method-badge method-${r.method}">${r.method}</span></td>
-          <td><code>${esc(r.path)}</code></td>
-          <td><strong>${r.limit}</strong> <span class="muted small">(shared)</span></td>
-          <td>${r.auth ? "Keys" : "—"}</td>
-          <td class="muted small">${esc(r.notes || "")}</td>
+          (item) => {
+            const row = rowsByOperationId.get(item.op.operationId) || {};
+            return `<tr>
+          <td><span class="method-badge method-${item.method}">${item.method}</span></td>
+          <td><code>${esc(item.path)}</code></td>
+          <td><strong>${esc(String(row.limit ?? 500))}</strong> <span class="muted small">(shared)</span></td>
+          <td>${needsAuth(item.op) ? "Keys" : "—"}</td>
+          <td class="muted small">${esc(row.notes || "")}</td>
         </tr>`
+          }
         )
         .join("")}
     </tbody>
   </table>`;
+
+  return getWorkflowGroups()
+    .map((category) => `<h3 class="rate-category-title">${esc(category.label)}</h3>${renderTable(category.items)}`)
+    .join("");
 }
 
 function renderStaticIntro() {
   const g = portalMeta.rateLimitGlobal || { limit: 500 };
   const rlHeaders = portalMeta.rateLimitHeaders;
-  const connected = !!(getActiveCredentials().publicKey && getActiveCredentials().privateKey);
+  const connected = isEnvConnected(backendEnv);
   return `
     <div class="hero-banner">
       <div class="hero-logo-wrap">
@@ -632,6 +914,7 @@ function renderStaticIntro() {
       <div class="hero-actions">
         <button type="button" class="btn-primary" id="heroConnectBtn">${connected ? "Manage API keys" : "Connect API keys"}</button>
         <a href="#/execute" class="btn-secondary">Open API Tester</a>
+        <a href="#/demo" class="btn-secondary">Run Demo</a>
         ${renderPostmanActions(true)}
       </div>
       ${
@@ -640,7 +923,7 @@ function renderStaticIntro() {
           : `<p class="hero-start-hint">Start here: connect your keys before using the API Tester or Postman downloads.</p>`
       }
     </div>
-    <div class="note warn"><strong>Dev sandbox behavior:</strong> Dev requests run against a live sandbox. Pushing an order creates a real order and AWB on your account, so cancel test orders when you're done. Dev and Live use separate keys.</div>
+    ${renderSandboxWarningNote()}
 
     <div class="section">
       <h2>What you can build</h2>
@@ -691,7 +974,7 @@ function renderStaticIntro() {
               .join("")}</tbody></table>`
           : ""
       }
-      <p style="margin-top:16px"><a href="#/rate-limits">Per-API rate limit table →</a> · <a href="#/errors">Error codes →</a></p>
+      <p style="margin-top:16px"><a href="#/errors">Error codes →</a></p>
     </div>
 
     <div class="section">
@@ -734,8 +1017,21 @@ function renderAuthPage() {
       )}
     </div>
 
-    <div class="note warn"><strong>Dev sandbox behavior:</strong> Dev requests can create real orders and AWBs on your account. Cancel test orders when you're done. Dev and Live use separate keys.</div>
+    ${renderSandboxWarningNote()}
     <div class="note"><strong>Security:</strong> Never expose <code>private-key</code> in front-end apps or mobile clients. Call Shipmozo from your backend only.</div>`;
+}
+
+function renderWorkflowStep(step) {
+  const targets = operations.filter((operation) => step.includes(operation.path));
+  const links = targets
+    .map(
+      (operation) =>
+        `<a href="#/execute?op=${encodeURIComponent(operation.id)}">Open ${esc(operation.summary)} in API Tester</a>`
+    )
+    .join(" · ");
+  return `<li><code>${esc(step)}</code>${
+    links ? ` <span class="workflow-step-links">${links}</span>` : ""
+  }</li>`;
 }
 
 function renderWorkflows() {
@@ -749,7 +1045,7 @@ function renderWorkflows() {
       <div class="section flow-card">
         <h2>${esc(f.title)}</h2>
         <ol class="flow-steps">
-          ${f.steps.map((s) => `<li><code>${esc(s)}</code></li>`).join("")}
+          ${f.steps.map(renderWorkflowStep).join("")}
         </ol>
       </div>`
       )
@@ -813,7 +1109,7 @@ function renderErrors() {
   return `
     <h1 class="page-title">Error codes &amp; troubleshooting</h1>
     <p class="page-lead">Shipmozo returns HTTP 200 with <code>result: "0"</code> for business errors. Use <code>message</code> and <code>data.error</code> for details.</p>
-    <p><a href="#/rate-limits">View all API rate limits →</a></p>
+    
 
     <div class="section">
       <h2>Error reference</h2>
@@ -948,6 +1244,7 @@ function renderEndpoint(item) {
       </div>
 
       <p style="margin-top:24px"><a href="#/execute?op=${encodeURIComponent(item.id)}" class="btn-primary inline-btn">Test this API →</a></p>
+      ${renderFieldContract(op.operationId, fieldContracts)}
     </article>`;
 }
 
@@ -971,54 +1268,95 @@ const TESTER_UNIT_FACTS = {
 
 const TESTER_PREREQS = {
   "/push-order": {
-    text: "You'll need: warehouse_id (from Get Warehouses).",
-    opId: "get-/get-warehouses",
-    label: "Get Warehouses",
+    text: 'Needs a valid warehouse_id. Get one from Get Warehouses (use the one with default: YES).',
+    links: [{ opId: "get-/get-warehouses", label: "Get Warehouses" }],
   },
   "/push-return-order": {
-    text: "You'll need: warehouse_id (from Get Warehouses) and return_reason_id (from Get Return Reason).",
-    opId: "get-/get-warehouses",
-    label: "Get Warehouses",
+    text: "Needs a return_reason_id from Get Return Reason. Weight here is in kg (unlike Push Order, which uses grams).",
+    links: [
+      { opId: "get-/get-return-reason", label: "Get Return Reason" },
+      { opId: "get-/get-warehouses", label: "Get Warehouses" },
+    ],
   },
   "/assign-courier": {
-    text: "You'll need: courier_id (from Rate Calculator) and an existing order_id.",
-    opId: "post-/rate-calculator",
-    label: "Rate Calculator",
+    text: "Needs the internal order_id from Push Order's response, and a courier_id from Rate Calculator.",
+    links: [
+      { opId: "post-/push-order", label: "Push Order" },
+      { opId: "post-/rate-calculator", label: "Rate Calculator" },
+    ],
   },
   "/auto-assign-order": {
     text: "You'll need: an order created via Push Order first.",
-    opId: "post-/push-order",
-    label: "Push Order",
+    links: [{ opId: "post-/push-order", label: "Push Order" }],
   },
   "/schedule-pickup": {
-    text: "You'll need: an assigned shipment / AWB from Assign Courier.",
-    opId: "post-/assign-courier",
-    label: "Assign Courier",
+    text: "Only needed if the chosen courier's pickups_automatically_scheduled is NO in Rate Calculator. Otherwise the AWB is already assigned.",
+    links: [{ opId: "post-/rate-calculator", label: "Rate Calculator" }],
+  },
+  "/cancel-order": {
+    text: "Needs the internal order_id and the awb_number from Assign Courier.",
+    links: [{ opId: "post-/assign-courier", label: "Assign Courier" }],
   },
   "/get-order-label/{awb_number}": {
-    text: "You'll need: awb_number from Assign Courier (or order detail).",
-    opId: "post-/assign-courier",
-    label: "Assign Courier",
+    text: "Needs the awb_number from Assign Courier or Schedule Pickup.",
+    links: [
+      { opId: "post-/assign-courier", label: "Assign Courier" },
+      { opId: "post-/schedule-pickup", label: "Schedule Pickup" },
+    ],
   },
   "/track-order": {
-    text: "You'll need: awb_number or order identifiers from a pushed/assigned shipment.",
-    opId: "post-/push-order",
-    label: "Push Order",
+    text: "Needs the awb_number from Assign Courier or Schedule Pickup.",
+    links: [
+      { opId: "post-/assign-courier", label: "Assign Courier" },
+      { opId: "post-/schedule-pickup", label: "Schedule Pickup" },
+    ],
   },
   "/order/update-warehouse": {
-    text: "You'll need: warehouse_id from Get Warehouses or Create Warehouse.",
-    opId: "get-/get-warehouses",
-    label: "Get Warehouses",
+    text: "Needs the internal order_id from Push Order and a warehouse_id from Get Warehouses.",
+    links: [
+      { opId: "post-/push-order", label: "Push Order" },
+      { opId: "get-/get-warehouses", label: "Get Warehouses" },
+    ],
   },
 };
 
-const OPTGROUP_ORDER = [
-  { key: "Orders", label: "Orders", tags: ["Orders"] },
-  { key: "Tracking", label: "Tracking", tags: ["Track", "Label"] },
-  { key: "Warehouse", label: "Warehouse", tags: ["Warehouse"] },
-  { key: "Utility", label: "Utility", tags: ["Utility", "Common"] },
-  { key: "Auth", label: "Auth", tags: [] },
-];
+function renderPrereqHtml(prereq) {
+  if (!prereq) return "";
+  const links = (prereq.links || (prereq.opId ? [{ opId: prereq.opId, label: prereq.label }] : []))
+    .map((link) => `<a href="#/execute?op=${encodeURIComponent(link.opId)}">${esc(link.label)}</a>`)
+    .join(" · ");
+  return `${esc(prereq.text)}${links ? ` ${links}` : ""}`;
+}
+
+function getFieldHint(path, fieldName) {
+  if (!fieldHints) return "";
+  return fieldHints[`${path}.${fieldName}`] || fieldHints[`${path}.${fieldName.split(".").pop()}`] || "";
+}
+
+async function loadPortalAssets() {
+  fieldContracts = await loadFieldContracts();
+  try {
+    const [hintsRes, scenariosRes] = await Promise.all([
+      fetch("/assets/field-hints.json"),
+      fetch("/assets/scenarios.json"),
+    ]);
+    fieldHints = await hintsRes.json();
+    scenarios = await scenariosRes.json();
+  } catch {
+    fieldHints = fieldHints || {};
+    scenarios = scenarios || {};
+  }
+}
+
+function workflowApiDeps() {
+  return {
+    proxyRequest,
+    authHeaders,
+    getActiveCredentials,
+    interpretShipmozoResponse,
+    toast,
+  };
+}
 
 function getJourney() {
   try {
@@ -1039,8 +1377,7 @@ function setJourney(patch) {
 }
 
 function syncJourneyFromAuth() {
-  const c = getActiveCredentials();
-  if (c.publicKey && c.privateKey) setJourney({ connected: true });
+  if (isEnvConnected(backendEnv)) setJourney({ connected: true });
 }
 
 function updateJourneyFromCall(item, payload) {
@@ -1086,40 +1423,18 @@ function renderJourneyStrip() {
   return `<nav class="journey-strip" aria-label="Integration progress">${parts.join("")}</nav>`;
 }
 
-function testerGroupForOp(o) {
-  if (o.path === "/login") return "Auth";
-  for (const g of OPTGROUP_ORDER) {
-    if (g.tags.includes(o.tag)) return g.key;
-  }
-  return "Utility";
-}
-
 function renderTesterOpOptions(preselectId) {
-  const preferredFirst = "post-/push-order";
-  const groups = Object.fromEntries(OPTGROUP_ORDER.map((g) => [g.key, []]));
-  operations.forEach((o) => {
-    const g = testerGroupForOp(o);
-    if (!groups[g]) groups[g] = [];
-    groups[g].push(o);
-  });
-  if (groups.Orders?.length) {
-    groups.Orders.sort((a, b) => {
-      if (a.id === preferredFirst) return -1;
-      if (b.id === preferredFirst) return 1;
-      return a.path.localeCompare(b.path);
-    });
-  }
-  return OPTGROUP_ORDER.map((g) => {
-    const list = groups[g.key] || [];
-    if (!list.length) return "";
-    const opts = list
+  return getWorkflowGroups()
+    .map((category) => {
+      const opts = category.items
       .map(
         (o) =>
           `<option value="${o.id}" ${o.id === preselectId ? "selected" : ""}>${o.method} ${o.path} — ${esc(o.summary)}</option>`
       )
       .join("");
-    return `<optgroup label="${esc(g.label)}">${opts}</optgroup>`;
-  }).join("");
+      return `<optgroup label="${esc(category.label)}">${opts}</optgroup>`;
+    })
+    .join("");
 }
 
 function renderTester(preselectId) {
@@ -1128,7 +1443,7 @@ function renderTester(preselectId) {
   return `
     <div class="tester-layout">
       <h1 class="page-title">API Tester</h1>
-      <p class="page-lead">Live requests go through this portal's proxy to <code>${getApiBase()}</code> (<strong>${esc(getBackendLabel())}</strong>). Connect API keys in the header — they are sent as <code>public-key</code> and <code>private-key</code> on every call.</p>
+      <p class="page-lead">Live requests go through this portal's proxy to <code>${getApiBase()}</code>&nbsp;(<strong>${esc(getBackendLabel())}</strong>). Connect API keys in the header — they are sent as <code>public-key</code> and <code>private-key</code> on every call.</p>
       ${renderJourneyStrip()}
 
       <div class="tester-grid">
@@ -1219,10 +1534,11 @@ function bindTester(preselectId) {
     if (bodyLabel?.tagName === "LABEL") bodyLabel.classList.toggle("hidden", hideBody);
 
     const authRequired = needsAuth(item.op);
-    const creds = getActiveCredentials();
-    if (authRequired && !creds.publicKey) {
+    if (authRequired && !isEnvConnected(backendEnv)) {
       hint.className = "hint-warn";
-      hint.textContent = "Connect API keys (header button) or paste keys and click Save.";
+      hint.textContent = hasKeysFor(backendEnv)
+        ? "Keys are saved but not connected. Open Connect API and click Connect."
+        : "Connect API keys (header button) or paste keys and click Save.";
     } else if (authRequired) {
       hint.className = "hint-ok";
       hint.textContent = "API keys will be sent as public-key and private-key headers.";
@@ -1409,22 +1725,31 @@ async function copyText(text, label) {
 function renderPhase1Tester(preselectId) {
   const selectedId = resolveTesterOperationId(preselectId);
   const opts = renderTesterOpOptions(selectedId);
+  const mode = getSavedTesterMode();
+  const lifecycle = mode === "lifecycle";
 
   return `
-    <div class="tester-layout">
+    <div class="tester-layout" id="testerRoot">
       <h1 class="page-title">API Tester</h1>
-      <p class="page-lead">Requests go through this portal's proxy to <code>${getApiBase()}</code> (<strong>${esc(getBackendLabel())}</strong>). The response body below is the exact Shipmozo API body.</p>
-      <div class="tester-safety-note"><strong>Dev requests run against a live sandbox:</strong> pushing an order creates a real order and AWB on your account. Cancel test orders when you're done. Dev and Live use separate keys.</div>
-      ${renderJourneyStrip()}
+      <p class="page-lead">Requests go through this portal's proxy to <code>${getApiBase()}</code>&nbsp;(<strong>${esc(getBackendLabel())}</strong>). The response body below is the exact Shipmozo API body.</p>
+      ${renderModeToggle(mode)}
+      ${renderTesterSafetyNote()}
+      ${lifecycle ? "" : renderJourneyStrip()}
 
+      <div id="singleModePanel" class="${lifecycle ? "hidden" : ""}">
       <div class="tester-grid">
         <div class="card tester-form" id="testerForm">
+          <label for="testerScenario">Load scenario</label>
+          <select id="testerScenario" aria-label="Load scenario"><option value="">— Choose a scenario —</option></select>
+          <p class="scenario-expected hidden" id="testerScenarioExpected"></p>
           <label for="testerOp">API endpoint</label>
           <select id="testerOp" aria-label="API endpoint">${opts}</select>
           <div id="testerPrereq" class="tester-prereq hidden"></div>
           <div id="testerUnitFacts" class="tester-unit-facts hidden"></div>
+          <div id="testerFieldContract"></div>
           <div id="testerParams"></div>
           <label for="testerBody">Request body (JSON)</label>
+          <div id="testerBodyHints" class="tester-body-hints hidden"></div>
           <textarea id="testerBody" rows="12" placeholder="{}" aria-label="Request body (JSON)"></textarea>
           <div id="testerEnumControls" class="tester-enum-controls hidden"></div>
           <div class="tester-actions">
@@ -1446,11 +1771,14 @@ function renderPhase1Tester(preselectId) {
           <div class="result-banner hidden" id="testerResultBanner" role="status"></div>
           <div class="response-tabs" role="tablist" aria-label="Response views">
             <button type="button" class="response-tab active" role="tab" aria-selected="true" data-response-tab="body">Response Body</button>
+            <button type="button" class="response-tab hidden" role="tab" aria-selected="false" data-response-tab="label" id="testerLabelTab">Label</button>
             <button type="button" class="response-tab" role="tab" aria-selected="false" data-response-tab="headers">Response Headers</button>
             <button type="button" class="response-tab" role="tab" aria-selected="false" data-response-tab="debug">Debug</button>
           </div>
           <div class="response-panel" data-response-panel="body">
             <div class="response-box"><pre id="testerOut">{}</pre></div>
+          </div>
+          <div class="response-panel hidden" data-response-panel="label">
             <div class="label-preview hidden" id="testerLabelPreview"></div>
           </div>
           <div class="response-panel hidden" data-response-panel="headers">
@@ -1461,11 +1789,58 @@ function renderPhase1Tester(preselectId) {
           </div>
         </div>
       </div>
+      </div>
+
+      <div id="workflowModeMount" class="${lifecycle ? "" : "hidden"}">
+        ${
+          lifecycle
+            ? (() => {
+                const scenarioId = loadLifecycleScenarioId();
+                const wf = getLifecycleWorkflow(scenarioId);
+                return renderWorkflowPanel(
+                  wf,
+                  { ...loadWorkflowContext() },
+                  {},
+                  wf.steps[0].id,
+                  null,
+                  scenarioId
+                );
+              })()
+            : ""
+        }
+      </div>
     </div>`;
 }
 
 function bindPhase1Tester(preselectId) {
+  const root = $("#testerRoot") || $("#main");
+  const mode = getSavedTesterMode();
+
+  root.querySelectorAll('input[name="testerMode"]').forEach((radio) => {
+    radio.addEventListener("change", (e) => {
+      saveTesterMode(e.target.value);
+      const params = new URLSearchParams(location.hash.split("?")[1] || "");
+      if (e.target.value === "lifecycle") {
+        params.set("mode", "lifecycle");
+        location.hash = `#/execute?${params.toString()}`;
+      } else {
+        params.delete("mode");
+        const qs = params.toString();
+        location.hash = qs ? `#/execute?${qs}` : "#/execute";
+      }
+    });
+  });
+
+  if (mode === "lifecycle") {
+    bindWorkflowPanel(root, workflowApiDeps());
+    return;
+  }
+
   const opSelect = $("#testerOp");
+  const scenarioSelect = $("#testerScenario");
+  const scenarioExpected = $("#testerScenarioExpected");
+  const fieldContractEl = $("#testerFieldContract");
+  const bodyHintsEl = $("#testerBodyHints");
   const paramsDiv = $("#testerParams");
   const bodyTa = $("#testerBody");
   const hint = $("#testerAuthHint");
@@ -1521,12 +1896,17 @@ function bindPhase1Tester(preselectId) {
 
   function renderLabelPreview(payload) {
     const host = $("#testerLabelPreview");
+    const labelTab = $("#testerLabelTab");
     if (!host) return;
     const entries = Array.isArray(payload?.data) ? payload.data : [payload?.data];
     const rawLabel = entries.find((entry) => typeof entry?.label === "string")?.label;
     if (!rawLabel) {
       host.classList.add("hidden");
       host.innerHTML = "";
+      labelTab?.classList.add("hidden");
+      if (labelTab?.classList.contains("active") || labelTab?.getAttribute("aria-selected") === "true") {
+        setResponseTab("body");
+      }
       return;
     }
     const source = rawLabel.startsWith("data:")
@@ -1536,15 +1916,20 @@ function bindPhase1Tester(preselectId) {
     host.innerHTML = "";
     const heading = document.createElement("h3");
     heading.textContent = "Shipping label preview";
+    const frame = document.createElement("div");
+    frame.className = "label-preview-frame";
     const image = document.createElement("img");
     image.src = source;
     image.alt = "Shipping label returned by Shipmozo";
+    frame.append(image);
     const download = document.createElement("a");
     download.href = source;
     download.download = "shipmozo-label.png";
     download.className = "btn-secondary btn-sm";
     download.textContent = "Download label";
-    host.append(heading, image, download);
+    host.append(heading, frame, download);
+    labelTab?.classList.remove("hidden");
+    setResponseTab("label");
   }
 
   function renderResponse(payload, wrapped, durationMs) {
@@ -1562,7 +1947,10 @@ function bindPhase1Tester(preselectId) {
     );
     updateResultBanner(payload);
     renderLabelPreview(payload);
-    setResponseTab("body");
+    const hasLabel = Array.isArray(payload?.data)
+      ? payload.data.some((entry) => typeof entry?.label === "string")
+      : typeof payload?.data?.label === "string";
+    if (!hasLabel) setResponseTab("body");
   }
 
   function syncEnumControlsFromBody() {
@@ -1617,7 +2005,7 @@ function bindPhase1Tester(preselectId) {
     const prereq = TESTER_PREREQS[item.path];
     if (prereq) {
       prereqEl.classList.remove("hidden");
-      prereqEl.innerHTML = `${esc(prereq.text)} <a href="#/execute?op=${encodeURIComponent(prereq.opId)}">Jump to ${esc(prereq.label)} →</a>`;
+      prereqEl.innerHTML = renderPrereqHtml(prereq);
     } else {
       prereqEl.classList.add("hidden");
       prereqEl.innerHTML = "";
@@ -1625,7 +2013,77 @@ function bindPhase1Tester(preselectId) {
     const facts = TESTER_UNIT_FACTS[item.path];
     unitFactsEl.classList.toggle("hidden", !facts);
     unitFactsEl.textContent = facts || "";
+    if (fieldContractEl) {
+      fieldContractEl.innerHTML = renderFieldContractCollapsible(item.op.operationId, fieldContracts);
+    }
+    if (bodyHintsEl && fieldHints) {
+      const hints = Object.entries(fieldHints)
+        .filter(([key]) => key.startsWith(`${item.path}.`))
+        .map(([key, text]) => {
+          const field = key.slice(item.path.length + 1);
+          return `<span class="field-hint-item"><code>${esc(field)}</code> — ${esc(text)}</span>`;
+        });
+      if (hints.length) {
+        bodyHintsEl.classList.remove("hidden");
+        bodyHintsEl.innerHTML = hints.join(" · ");
+      } else {
+        bodyHintsEl.classList.add("hidden");
+        bodyHintsEl.innerHTML = "";
+      }
+    }
     renderEnumControls(item);
+    populateScenarioSelect(item);
+  }
+
+  function populateScenarioSelect(item) {
+    if (!scenarioSelect) return;
+    const list = scenarios?.[item.id];
+    scenarioSelect.innerHTML = '<option value="">— Choose a scenario —</option>';
+    if (!list || !list.length) {
+      if (item.path.includes("international")) {
+        scenarioSelect.innerHTML += '<option value="" disabled>Coming soon — insufficient verified field data</option>';
+      }
+      scenarioExpected?.classList.add("hidden");
+      return;
+    }
+    list.forEach((scenario, index) => {
+      const opt = document.createElement("option");
+      opt.value = String(index);
+      opt.textContent = scenario.label;
+      scenarioSelect.appendChild(opt);
+    });
+    scenarioExpected?.classList.add("hidden");
+  }
+
+  function applyScenario(index) {
+    const item = currentOp();
+    const list = scenarios?.[item?.id];
+    const scenario = list?.[Number(index)];
+    if (!scenario) {
+      scenarioExpected?.classList.add("hidden");
+      return;
+    }
+    if (scenario.body) bodyTa.value = JSON.stringify(scenario.body, null, 2);
+    if (scenario.params) {
+      Object.entries(scenario.params).forEach(([name, value]) => {
+        const input = paramsDiv.querySelector(`input[data-param="${name}"]`);
+        if (input) input.value = value;
+      });
+    }
+    syncEnumControlsFromBody();
+    if (scenarioExpected) {
+      scenarioExpected.classList.remove("hidden");
+      scenarioExpected.textContent = `Expected: ${scenario.expected || "See API response"}`;
+    }
+  }
+
+  function appendFieldHint(labelEl, path, fieldName) {
+    const hintText = getFieldHint(path, fieldName);
+    if (!hintText) return;
+    const span = document.createElement("span");
+    span.className = "field-hint";
+    span.textContent = hintText;
+    labelEl.appendChild(span);
   }
 
   function fillForm() {
@@ -1637,6 +2095,7 @@ function bindPhase1Tester(preselectId) {
       .forEach((parameter) => {
         const label = document.createElement("label");
         label.textContent = `${parameter.name} (${parameter.in})${parameter.required ? " *" : ""}`;
+        appendFieldHint(label, item.path, parameter.name);
         const input = document.createElement("input");
         input.dataset.param = parameter.name;
         input.dataset.in = parameter.in;
@@ -1651,10 +2110,11 @@ function bindPhase1Tester(preselectId) {
     bodyLabel?.classList.toggle("hidden", hideBody);
 
     const authRequired = needsAuth(item.op);
-    const credentials = getActiveCredentials();
-    if (authRequired && !credentials.publicKey) {
+    if (authRequired && !isEnvConnected(backendEnv)) {
       hint.className = "hint-warn";
-      hint.textContent = "Connect API keys (header button) or paste keys and click Save.";
+      hint.textContent = hasKeysFor(backendEnv)
+        ? "Keys are saved but not connected. Open Connect API and click Connect."
+        : "Connect API keys (header button) or paste keys and click Save.";
     } else if (authRequired) {
       hint.className = "hint-ok";
       hint.textContent = "API keys will be sent as public-key and private-key headers.";
@@ -1689,6 +2149,8 @@ function bindPhase1Tester(preselectId) {
     const item = currentOp();
     if (item) history.replaceState(null, "", `#/execute?op=${encodeURIComponent(item.id)}`);
   });
+
+  scenarioSelect?.addEventListener("change", () => applyScenario(scenarioSelect.value));
 
   $("#testerRun").addEventListener("click", async () => {
     const { item, path } = buildPathAndQuery();
@@ -1788,19 +2250,13 @@ function buildSidebar(filter = "") {
         { href: "#/", label: "Overview" },
         { href: "#/auth", label: "Authentication" },
         { href: "#/workflows", label: "Integration flows" },
-        { href: "#/rate-limits", label: "Rate limits" },
         { href: "#/errors", label: "Error codes" },
         { href: "#/best-practices", label: "Best practices" },
       ],
     },
   ];
 
-  const byTag = {};
-  operations.forEach((o) => {
-    if (q && !`${o.method} ${o.path} ${o.summary}`.toLowerCase().includes(q)) return;
-    if (!byTag[o.tag]) byTag[o.tag] = [];
-    byTag[o.tag].push(o);
-  });
+  const workflowGroups = getWorkflowGroups(operations.filter((operation) => matchesWorkflowSearch(operation, q)));
 
   let html = "";
   staticGroups.forEach((g) => {
@@ -1813,22 +2269,9 @@ function buildSidebar(filter = "") {
 
   html += `<div class="nav-group"><div class="nav-group-title">Tools</div><a class="nav-link" href="#/execute">API Tester</a></div>`;
 
-  const tagOrder = ["Common", "Warehouse", "Orders", "Track", "Label", "Utility"];
-  const tags = [...new Set([...tagOrder, ...Object.keys(byTag)])];
-  tags.forEach((tag) => {
-    if (!byTag[tag]?.length) return;
-    html += `<div class="nav-group"><div class="nav-group-title">${esc(tag)}</div>`;
-    const items = [...byTag[tag]];
-    if (tag === "Orders") {
-      const rateCalculator = operations.find((operation) => operation.path === "/rate-calculator");
-      const rateCalculatorMatchesFilter =
-        !q || `${rateCalculator?.method} ${rateCalculator?.path} ${rateCalculator?.summary}`.toLowerCase().includes(q);
-      const assignCourierIndex = items.findIndex((operation) => operation.path === "/assign-courier");
-      if (rateCalculator && rateCalculatorMatchesFilter && assignCourierIndex >= 0) {
-        items.splice(assignCourierIndex, 0, rateCalculator);
-      }
-    }
-    items.forEach((o) => {
+  workflowGroups.forEach((category) => {
+    html += `<div class="nav-group"><div class="nav-group-title">${esc(category.label)}</div>`;
+    category.items.forEach((o) => {
       html += `<a class="nav-link" href="#/api/${o.id}"><span class="method method-${o.method}">${o.method}</span>${esc(o.summary)}</a>`;
     });
     html += `</div>`;
@@ -1840,6 +2283,10 @@ function buildSidebar(filter = "") {
 function setActiveNav() {
   const hash = location.hash || "#/";
   const h = hash.split("?")[0];
+  const query = hash.includes("?") ? hash.split("?")[1] : "";
+  const params = new URLSearchParams(query);
+  const isLifecycle = h === "#/execute" && params.get("mode") === "lifecycle";
+  const isExecute = h === "#/execute" && !isLifecycle;
   document.querySelectorAll(".nav-link").forEach((a) => {
     a.classList.toggle("active", a.getAttribute("href") === h);
   });
@@ -1847,11 +2294,12 @@ function setActiveNav() {
     const nav = a.dataset.nav;
     a.classList.toggle(
       "active",
-      (nav === "execute" && h === "#/execute") ||
+      (nav === "execute" && isExecute) ||
+        (nav === "lifecycle" && isLifecycle) ||
+        (nav === "demo" && h === "#/demo") ||
         (nav === "workflows" && h === "#/workflows") ||
         (nav === "errors" && h === "#/errors") ||
-        (nav === "rate-limits" && h === "#/rate-limits") ||
-        (nav === "docs" && !["#/execute", "#/workflows", "#/errors", "#/rate-limits"].includes(h))
+        (nav === "docs" && !["#/execute", "#/workflows", "#/errors", "#/demo"].includes(h))
     );
   });
 }
@@ -1867,9 +2315,21 @@ async function route() {
   setActiveNav();
 
   if (hash.startsWith("#/execute")) {
-    const op = new URLSearchParams(hash.split("?")[1] || "").get("op");
+    const query = hash.split("?")[1] || "";
+    const params = new URLSearchParams(query);
+    const op = params.get("op");
+    if (params.get("mode") === "lifecycle") {
+      saveTesterMode("lifecycle");
+    } else if (params.has("op")) {
+      saveTesterMode("single");
+    }
     main.innerHTML = renderPhase1Tester(op);
     bindPhase1Tester(op);
+    return;
+  }
+  if (hash.startsWith("#/demo")) {
+    main.innerHTML = renderDemoPage();
+    bindDemoPage();
     return;
   }
   if (hash === "#/" || hash === "#") {
@@ -1888,8 +2348,7 @@ async function route() {
     return;
   }
   if (hash === "#/rate-limits") {
-    main.innerHTML = renderRateLimitsPage();
-    bindLiveRateLimit(main);
+    location.hash = "#/";
     return;
   }
   if (hash === "#/errors") {
@@ -1924,6 +2383,7 @@ function setModalOpen(open) {
 function openAuthDialog() {
   const dlg = $("#authDialog");
   if (!dlg) return;
+  syncAuthUI();
   setModalOpen(true);
   if (dlg.showModal) dlg.showModal();
   else dlg.setAttribute("open", "");
@@ -1960,8 +2420,8 @@ function bindAuthDialog() {
       await loginWithPassword(u, p);
       setJourney({ connected: true });
       msg.className = "auth-login-msg ok";
-      msg.textContent = "Keys saved. You can close this dialog.";
-      toast("API keys connected", "ok");
+      msg.textContent = `Connected as ${getEnvShortLabel()}. You can close this dialog.`;
+      toast(`Connected as ${getEnvShortLabel()}`, "ok");
       closeAuthDialog();
     } catch (e) {
       msg.className = "auth-login-msg error";
@@ -1981,35 +2441,78 @@ function bindAuthDialog() {
     credentials.publicKey = c.publicKey;
     credentials.privateKey = c.privateKey;
     saveCredentials();
-    setJourney({ connected: true });
     msg.className = "auth-login-msg";
     msg.textContent = "Checking account with Shipmozo…";
     const accountState = await probeAccountStatus();
-    syncAuthUI(accountState === "verified" ? "verified" : accountState === "pending" ? "pending" : undefined);
+    if (accountState === "unauthorized") {
+      setEnvConnected(backendEnv, false);
+      syncAuthUI("unauthorized");
+      msg.className = "auth-login-msg error";
+      msg.textContent = `${getEnvShortLabel()} rejected these keys. Dev and Live use different key pairs — sign in while ${getEnvShortLabel()} is selected (same username/password is fine).`;
+      toast(`${getEnvShortLabel()} rejected these keys`, "error");
+      return;
+    }
+    setJourney({ connected: true });
+    syncAuthUI(accountHintFromProbe(accountState));
     if (accountState === "pending") {
       msg.className = "auth-login-msg error";
       msg.textContent =
         "Keys are saved and valid, but your Shipmozo profile is still under verification. Complete KYC in the panel — APIs will return result 0 until approved.";
-      toast("Keys saved — account pending verification", "error");
+      toast(`Connected as ${getEnvShortLabel()} — account pending`, "error");
     } else if (accountState === "verified") {
       msg.className = "auth-login-msg ok";
-      msg.textContent = "Keys saved. Account is active.";
-      toast("Keys saved — account ready", "ok");
+      msg.textContent = `Connected as ${getEnvShortLabel()}. Account is active.`;
+      toast(`Connected as ${getEnvShortLabel()}`, "ok");
       closeAuthDialog();
     } else {
       msg.className = "auth-login-msg ok";
-      msg.textContent = "Keys saved locally.";
-      toast("API keys saved", "ok");
+      msg.textContent = `Connected as ${getEnvShortLabel()}. Keys saved locally.`;
+      toast(`Connected as ${getEnvShortLabel()}`, "ok");
       closeAuthDialog();
     }
   });
 
-  $("#authClearBtn")?.addEventListener("click", () => {
-    clearCredentials();
-    $("#authUsername").value = "";
-    $("#authPassword").value = "";
-    $("#authLoginMsg").textContent = "";
-    toast("Disconnected", "info");
+  $("#authClearBtn")?.addEventListener("click", async () => {
+    const action = $("#authClearBtn")?.dataset?.authAction;
+    const msg = $("#authLoginMsg");
+    if (action === "connect") {
+      if (!connectCurrentEnv()) {
+        toast("No saved keys for this server", "error");
+        return;
+      }
+      msg.className = "auth-login-msg";
+      msg.textContent = "Checking account with Shipmozo…";
+      const accountState = await probeAccountStatus();
+      if (accountState === "unauthorized") {
+        setEnvConnected(backendEnv, false);
+        syncAuthUI("unauthorized");
+        msg.className = "auth-login-msg error";
+        msg.textContent = `${getEnvShortLabel()} rejected the saved keys. Sign in while ${getEnvShortLabel()} is selected to fetch the correct key pair.`;
+        toast(`${getEnvShortLabel()} rejected these keys`, "error");
+        return;
+      }
+      setJourney({ connected: true });
+      syncAuthUI(accountHintFromProbe(accountState));
+      if (accountState === "pending") {
+        msg.className = "auth-login-msg error";
+        msg.textContent =
+          "Connected with saved keys, but your Shipmozo profile is still under verification.";
+        toast(`Connected as ${getEnvShortLabel()} — account pending`, "error");
+      } else {
+        msg.className = "auth-login-msg ok";
+        msg.textContent = `Connected as ${getEnvShortLabel()}.`;
+        toast(`Connected as ${getEnvShortLabel()}`, "ok");
+        closeAuthDialog();
+      }
+      return;
+    }
+    if (action === "disconnect") {
+      disconnectCurrentEnv();
+      $("#authUsername").value = "";
+      $("#authPassword").value = "";
+      msg.textContent = "";
+      toast(`${getEnvShortLabel()} disconnected — keys kept in browser`, "info");
+    }
   });
 }
 
@@ -2039,8 +2542,10 @@ async function init() {
   syncBackendUI();
   bindAuthDialog();
   bindBackendSwitch();
+  refreshAuthStatusFromKeys();
   try {
     await loadSpec();
+    await loadPortalAssets();
     $("#loading")?.remove();
     buildSidebar();
     $("#searchInput").addEventListener("input", (e) => buildSidebar(e.target.value));

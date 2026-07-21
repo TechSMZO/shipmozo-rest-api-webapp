@@ -1,0 +1,207 @@
+{
+  "post-/rate-calculator": [
+    {
+      "id": "serviceable-route",
+      "label": "Serviceable route (verified)",
+      "body": {
+        "pickup_pincode": 122018,
+        "delivery_pincode": 122001,
+        "payment_type": "PREPAID",
+        "shipment_type": "FORWARD",
+        "order_amount": 1000,
+        "type_of_package": "SPS",
+        "rov_type": "ROV_OWNER",
+        "cod_amount": "",
+        "weight": 500,
+        "dimensions": [{ "no_of_box": "1", "length": "22", "width": "10", "height": "10" }]
+      },
+      "expected": "result 1 — list of couriers"
+    },
+    {
+      "id": "cod-shipment",
+      "label": "COD shipment",
+      "body": {
+        "pickup_pincode": 122018,
+        "delivery_pincode": 122001,
+        "payment_type": "COD",
+        "shipment_type": "FORWARD",
+        "order_amount": 1000,
+        "type_of_package": "SPS",
+        "rov_type": "ROV_OWNER",
+        "cod_amount": "1500",
+        "weight": 500,
+        "dimensions": [{ "no_of_box": "1", "length": "22", "width": "10", "height": "10" }]
+      },
+      "expected": "result 1 — COD-eligible couriers"
+    },
+    {
+      "id": "non-serviceable",
+      "label": "Non-serviceable pincode",
+      "body": {
+        "pickup_pincode": 122018,
+        "delivery_pincode": 0,
+        "payment_type": "PREPAID",
+        "shipment_type": "FORWARD",
+        "order_amount": 1000,
+        "type_of_package": "SPS",
+        "rov_type": "ROV_OWNER",
+        "cod_amount": "",
+        "weight": 500,
+        "dimensions": [{ "no_of_box": "1", "length": "22", "width": "10", "height": "10" }]
+      },
+      "params": { "delivery_pincode": "000000" },
+      "expected": "result 0 or empty courier list"
+    }
+  ],
+  "post-/push-order": [
+    {
+      "id": "success",
+      "label": "Success (verified)",
+      "body": {
+        "order_id": "PORTAL-SCENARIO-001",
+        "order_date": "2026-07-21",
+        "order_type": "ESSENTIALS",
+        "consignee_name": "Scenario Test Customer",
+        "consignee_phone": 8000042323,
+        "consignee_alternate_phone": 8000042324,
+        "consignee_email": "customer@example.com",
+        "consignee_address_line_one": "House 101, Test Street",
+        "consignee_address_line_two": "Near Test Landmark",
+        "consignee_pin_code": 122001,
+        "consignee_city": "Gurgaon",
+        "consignee_state": "Haryana",
+        "product_detail": [{ "name": "Test Product", "sku_number": "SKU-001", "quantity": 1, "discount": "", "hsn": "1234", "unit_price": 1000, "product_category": "Other" }],
+        "payment_type": "PREPAID",
+        "cod_amount": "",
+        "weight": 500,
+        "length": 10,
+        "width": 10,
+        "height": 10,
+        "warehouse_id": "519",
+        "gst_ewaybill_number": "",
+        "gstin_number": ""
+      },
+      "expected": "result 1 — Order Pushed Successfully"
+    },
+    {
+      "id": "cod-order",
+      "label": "COD order",
+      "body": {
+        "order_id": "PORTAL-SCENARIO-COD",
+        "order_date": "2026-07-21",
+        "order_type": "ESSENTIALS",
+        "consignee_name": "COD Customer",
+        "consignee_phone": 8000042323,
+        "consignee_pin_code": 122001,
+        "consignee_city": "Gurgaon",
+        "consignee_state": "Haryana",
+        "consignee_address_line_one": "Test Address",
+        "product_detail": [{ "name": "Test", "sku_number": "SKU-1", "quantity": 1, "unit_price": 1500, "product_category": "Other" }],
+        "payment_type": "COD",
+        "cod_amount": "1500",
+        "weight": 500,
+        "length": 10,
+        "width": 10,
+        "height": 10,
+        "warehouse_id": "519"
+      },
+      "expected": "result 1"
+    },
+    {
+      "id": "invalid-warehouse",
+      "label": "Failure — invalid warehouse (verified)",
+      "body": {
+        "order_id": "PORTAL-SCENARIO-FAIL",
+        "order_date": "2026-07-21",
+        "order_type": "ESSENTIALS",
+        "consignee_name": "Fail Test",
+        "consignee_phone": 8000042323,
+        "consignee_pin_code": 122001,
+        "consignee_city": "Gurgaon",
+        "consignee_state": "Haryana",
+        "consignee_address_line_one": "Test",
+        "product_detail": [{ "name": "Test", "sku_number": "SKU-1", "quantity": 1, "unit_price": 1000, "product_category": "Other" }],
+        "payment_type": "PREPAID",
+        "weight": 500,
+        "length": 10,
+        "width": 10,
+        "height": 10,
+        "warehouse_id": "526"
+      },
+      "expected": "result 0 — The selected warehouse id is invalid"
+    },
+    {
+      "id": "missing-field",
+      "label": "Failure — missing required field",
+      "body": {
+        "order_id": "PORTAL-SCENARIO-MISSING",
+        "order_date": "2026-07-21",
+        "consignee_name": "Missing Pin",
+        "consignee_phone": 8000042323,
+        "consignee_city": "Gurgaon",
+        "consignee_state": "Haryana",
+        "consignee_address_line_one": "Test",
+        "product_detail": [{ "name": "Test", "sku_number": "SKU-1", "quantity": 1, "unit_price": 1000, "product_category": "Other" }],
+        "payment_type": "PREPAID",
+        "weight": 500,
+        "length": 10,
+        "width": 10,
+        "height": 10,
+        "warehouse_id": "519"
+      },
+      "expected": "result 0 — validation error (consignee_pin_code missing)"
+    }
+  ],
+  "post-/assign-courier": [
+    {
+      "id": "success",
+      "label": "Success (verified shape)",
+      "body": { "order_id": "PASTE_INTERNAL_ORDER_ID", "courier_id": 37 },
+      "expected": "result 1 — returns awb_number"
+    },
+    {
+      "id": "order-not-found",
+      "label": "Failure — order not found",
+      "body": { "order_id": "DOESNOTEXIST", "courier_id": 37 },
+      "expected": "result 0 — Order not found"
+    }
+  ],
+  "post-/push-return-order": [
+    {
+      "id": "success",
+      "label": "Success",
+      "body": {
+        "order_id": "RETURN-SCENARIO-001",
+        "order_date": "2026-07-21",
+        "pickup_name": "Return Customer",
+        "pickup_phone": 8000042323,
+        "pickup_address_line_one": "Pickup Address",
+        "pickup_pin_code": 122001,
+        "pickup_city": "Gurgaon",
+        "pickup_state": "Haryana",
+        "product_detail": [{ "name": "Returned Item", "sku_number": "SKU-R1", "quantity": 1, "unit_price": 500, "product_category": "Other" }],
+        "payment_type": "PREPAID",
+        "weight": 1,
+        "length": 10,
+        "width": 10,
+        "height": 10,
+        "return_reason_id": 9,
+        "customer_request": "REFUND"
+      },
+      "expected": "result 1"
+    }
+  ],
+  "post-/cancel-order": [
+    {
+      "id": "success",
+      "label": "Success (verified)",
+      "body": { "order_id": "PASTE_INTERNAL_ORDER_ID", "awb_number": "PASTE_AWB" },
+      "expected": "result 1 — {order_id, refrence_id}"
+    }
+  ],
+  "post-/international-push-order": [],
+  "post-/international-rate-calculator": [],
+  "_meta": {
+    "internationalNote": "International scenarios coming soon — insufficient verified field data"
+  }
+}

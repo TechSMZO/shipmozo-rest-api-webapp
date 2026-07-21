@@ -658,6 +658,46 @@
           "response": []
         },
         {
+          "name": "Pincode Serviceability",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/pincode-serviceability",
+            "description": "Check whether a pickup-to-delivery pincode lane is serviceable before push-order.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_pincode\": 122018,\n  \"delivery_pincode\": 122001\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Rate Calculator",
           "request": {
             "method": "POST",

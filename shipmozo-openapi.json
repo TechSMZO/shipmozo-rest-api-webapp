@@ -65,6 +65,77 @@
                 }
             }
         },
+        "/pincode-serviceability": {
+            "post": {
+                "tags": [
+                    "Utility"
+                ],
+                "summary": "Check Pincode Serviceability",
+                "description": "Check whether a pickup-to-delivery pincode lane is serviceable before push-order.",
+                "operationId": "pincodeServiceability",
+                "parameters": [
+                    {
+                        "name": "public-key",
+                        "in": "header",
+                        "description": "Api Public Key",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "private-key",
+                        "in": "header",
+                        "description": "Api Private Key",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "description": "Pincode Serviceability Required Parameters",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "pickup_pincode": {
+                                        "description": "Pickup Pincode",
+                                        "type": "number",
+                                        "example": 122018
+                                    },
+                                    "delivery_pincode": {
+                                        "description": "Delivery Pincode",
+                                        "type": "number",
+                                        "example": 122001
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "example": {
+                                        "result": "1",
+                                        "message": "Success",
+                                        "data": {
+                                            "serviceable": true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/get-return-reason": {
             "get": {
                 "tags": [
