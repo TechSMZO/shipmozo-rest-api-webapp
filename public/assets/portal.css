@@ -192,7 +192,7 @@ a:hover { color: var(--brand-hover); }
   background: #f1f5f9;
   color: var(--muted);
   border: 1px solid var(--border);
-  max-width: 180px;
+  max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -204,11 +204,25 @@ a:hover { color: var(--brand-hover); }
   border-color: #6ee7b7;
 }
 
+.auth-status.saved {
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: #fdba74;
+  max-width: 280px;
+}
+
 .auth-status.pending {
   background: #fffbeb;
   color: #b45309;
   border-color: #fde68a;
-  max-width: 180px;
+  max-width: 280px;
+}
+
+.auth-status.rejected {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fecaca;
+  max-width: 280px;
 }
 
 .result-banner {
@@ -390,6 +404,10 @@ a:hover { color: var(--brand-hover); }
   font-size: 16px;
   margin-bottom: 32px;
   max-width: 600px;
+}
+
+.page-lead code {
+  margin-inline-end: 0.15em;
 }
 
 .hero-banner {
@@ -671,6 +689,7 @@ tr:last-child td { border-bottom: none; }
   list-style: none;
   margin: 0;
   padding: 0;
+  counter-reset: flow-step;
 }
 
 .flow-steps li {
@@ -679,10 +698,11 @@ tr:last-child td { border-bottom: none; }
   border-bottom: 1px dashed var(--border);
   font-family: var(--mono);
   font-size: 13px;
+  counter-increment: flow-step;
 }
 
 .flow-steps li::before {
-  content: attr(data-step);
+  content: counter(flow-step);
   position: absolute;
   left: 0;
   width: 24px;
@@ -695,6 +715,22 @@ tr:last-child td { border-bottom: none; }
   display: grid;
   place-items: center;
   font-family: var(--font);
+}
+
+.flow-steps li code {
+  font-family: var(--mono);
+}
+
+.workflow-step-links {
+  display: inline;
+  margin-left: 0.35em;
+  font-family: var(--font);
+  font-size: 13px;
+  white-space: normal;
+}
+
+.workflow-step-links a {
+  white-space: nowrap;
 }
 
 .tester-grid {
@@ -1264,6 +1300,15 @@ body.modal-open {
 .wf-panel { margin-top: 8px; }
 .wf-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
 .wf-workflow-select-label { font-weight: 600; }
+.wf-scenario-label { font-size: 0.875rem; font-weight: 600; color: var(--muted, #64748b); }
+.wf-scenario-select {
+  min-width: 220px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  font-size: 0.9rem;
+}
 .wf-progress {
   display: flex;
   flex-wrap: nowrap;

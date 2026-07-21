@@ -5,16 +5,18 @@ import {
   renderWorkflowPanel,
   bindWorkflowPanel,
   loadWorkflowContext,
-} from "./workflow-tester.js?v=27";
-import { lifecycleWorkflow } from "./lifecycle-workflow.js?v=27";
-import { loadFieldContracts, renderFieldContract, renderFieldContractCollapsible } from "./field-contract-renderer.js?v=27";
-import { renderDemoPage, bindDemoPage } from "./demo-player.js?v=27";
+  loadLifecycleScenarioId,
+  getLifecycleWorkflow,
+} from "./workflow-tester.js?v=32";
+import { loadFieldContracts, renderFieldContract, renderFieldContractCollapsible } from "./field-contract-renderer.js?v=32";
+import { renderDemoPage, bindDemoPage } from "./demo-player.js?v=32";
 
 const API_BACKENDS = {
   dev: { label: "Dev server", baseUrl: "https://appiify.com/app/api/v1" },
   live: { label: "Live server", baseUrl: "https://shipping-api.com/app/api/v1" },
 };
 const AUTH_STORAGE = "shipmozo_api_keys";
+const AUTH_CONNECTED_STORAGE = "shipmozo_api_connected";
 const BACKEND_STORAGE = "shipmozo_api_backend";
 /** Static file works even when a generic static server is used; /api/spec.json needs node server.js */
 const POSTMAN_ASSETS = {
@@ -63,6 +65,8 @@ let credentialsByEnv = {
   dev: { publicKey: "", privateKey: "" },
   live: { publicKey: "", privateKey: "" },
 };
+/** Per-env: true = use saved keys on requests; false = keys may exist but do not send until Connect. */
+let connectedByEnv = { dev: false, live: false };
 let credentials = credentialsByEnv.dev;
 let backendEnv = "dev";
 
@@ -72,6 +76,94 @@ function getApiBase() {
 
 function getBackendLabel() {
   return API_BACKENDS[backendEnv]?.label || "Dev server";
+}
+
+function getEnvShortLabel(env = backendEnv) {
+  return env === "live" ? "Live" : "Dev";
+}
+
+function hasKeysFor(env = backendEnv) {
+  const c = credentialsByEnv[env] || {};
+  return !!(c.publicKey && c.privateKey);
+}
+
+function isEnvConnected(env = backendEnv) {
+  return !!connectedByEnv[env] && hasKeysFor(env);
+}
+
+function persistConnectedFlags() {
+  try {
+    localStorage.setItem(AUTH_CONNECTED_STORAGE, JSON.stringify(connectedByEnv));
+  } catch {
+    /* ignore */
+  }
+}
+
+function setEnvConnected(env, connected) {
+  if (env !== "dev" && env !== "live") return;
+  connectedByEnv[env] = !!connected;
+  persistConnectedFlags();
+}
+
+function loadConnectedFlags() {
+  try {
+    const raw = localStorage.getItem(AUTH_CONNECTED_STORAGE);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      connectedByEnv = {
+        dev: !!parsed.dev,
+        live: !!parsed.live,
+      };
+      return;
+    }
+  } catch {
+    /* fall through to migrate */
+  }
+  // First load after this feature: if keys exist, treat as connected.
+  connectedByEnv = {
+    dev: hasKeysFor("dev"),
+    live: hasKeysFor("live"),
+  };
+  persistConnectedFlags();
+}
+
+function renderSandboxWarningNote() {
+  if (backendEnv === "live") {
+    return `<div class="note warn"><strong>Live API:</strong> Requests hit production (<code>shipping-api.com</code>). Orders and AWBs are real. <strong>Dev keys do not authorize on Live</strong> — sign in (or paste Live panel keys) while Live is selected.</div>`;
+  }
+  return `<div class="note warn"><strong>Dev sandbox:</strong> Dev requests run against a live sandbox. Pushing an order creates a real order and AWB on your account — cancel test orders when you're done. <strong>Live keys do not authorize on Dev</strong> — each server has its own key pair.</div>`;
+}
+
+function renderTesterSafetyNote() {
+  if (backendEnv === "live") {
+    return `<div class="tester-safety-note"><strong>Live requests hit production:</strong> pushing an order creates a real order and AWB. Dev keys will return <code>unauthorised user access</code> on Live — connect Live keys for this server.</div>`;
+  }
+  return `<div class="tester-safety-note"><strong>Dev requests run against a live sandbox:</strong> pushing an order creates a real order and AWB on your account. Cancel test orders when you're done. Each server needs its own API keys.</div>`;
+}
+
+function sameKeyPair(a, b) {
+  return !!(
+    a?.publicKey &&
+    a?.privateKey &&
+    b?.publicKey &&
+    b?.privateKey &&
+    a.publicKey === b.publicKey &&
+    a.privateKey === b.privateKey
+  );
+}
+
+/** Legacy storage copied one key pair into both slots; Live rejects Dev keys. */
+function scrubMirroredLiveKeys() {
+  if (!sameKeyPair(credentialsByEnv.dev, credentialsByEnv.live)) return false;
+  credentialsByEnv.live = { publicKey: "", privateKey: "" };
+  connectedByEnv.live = false;
+  try {
+    localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
+  } catch {
+    /* ignore */
+  }
+  persistConnectedFlags();
+  return true;
 }
 
 function loadBackend() {
@@ -107,7 +199,14 @@ function syncBackendUI() {
 function bindBackendSwitch() {
   $("#backendEnv")?.addEventListener("change", (e) => {
     saveBackend(e.target.value);
-    toast(`Using ${getBackendLabel()} — ${getApiBase()}`, "info");
+    const env = getEnvShortLabel();
+    if (isEnvConnected(backendEnv)) {
+      toast(`Connected as ${env} — ${getApiBase()}`, "ok");
+    } else if (hasKeysFor(backendEnv)) {
+      toast(`${env} selected — keys saved, not connected`, "info");
+    } else {
+      toast(`Using ${getBackendLabel()} — connect keys to call the API`, "info");
+    }
     route();
   });
 }
@@ -257,17 +356,17 @@ function loadCredentials() {
         if (parsed.dev) credentialsByEnv.dev = { ...credentialsByEnv.dev, ...parsed.dev };
         if (parsed.live) credentialsByEnv.live = { ...credentialsByEnv.live, ...parsed.live };
       } else if (parsed.publicKey !== undefined || parsed.privateKey !== undefined) {
-        const legacy = {
+        // Flat legacy blob was Dev-only; never mirror into Live (keys are not interchangeable).
+        credentialsByEnv.dev = {
           publicKey: parsed.publicKey || "",
           privateKey: parsed.privateKey || "",
         };
-        credentialsByEnv.dev = { ...legacy };
-        credentialsByEnv.live = { ...legacy };
+        credentialsByEnv.live = { publicKey: "", privateKey: "" };
       }
-      if (migratedFromSession) {
+      if (migratedFromSession || (!parsed.dev && !parsed.live && (parsed.publicKey || parsed.privateKey))) {
         try {
           localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
-          sessionStorage.removeItem(AUTH_STORAGE);
+          if (migratedFromSession) sessionStorage.removeItem(AUTH_STORAGE);
         } catch {
           /* ignore */
         }
@@ -280,57 +379,103 @@ function loadCredentials() {
     };
   }
   applyActiveCredentials();
+  loadConnectedFlags();
+  scrubMirroredLiveKeys();
+  applyActiveCredentials();
   syncAuthUI();
 }
 
 function saveCredentials() {
   persistCredentialsToStore();
+  setEnvConnected(backendEnv, hasKeysFor(backendEnv));
   syncAuthUI();
 }
 
-function clearCredentials() {
-  credentials = { publicKey: "", privateKey: "" };
-  credentialsByEnv[backendEnv] = { ...credentials };
-  try {
-    localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
-  } catch {
-    /* ignore */
-  }
+/** Disconnect current env: stop using keys for requests, but keep them saved. */
+function disconnectCurrentEnv() {
+  setEnvConnected(backendEnv, false);
   syncAuthUI();
+}
+
+/** Reconnect current env using keys already saved in the browser. */
+function connectCurrentEnv() {
+  if (!hasKeysFor(backendEnv)) return false;
+  setEnvConnected(backendEnv, true);
+  syncAuthUI();
+  return true;
+}
+
+function syncAuthActionButtons() {
+  const clearBtn = $("#authClearBtn");
+  if (!clearBtn) return;
+  const keys = hasKeysFor(backendEnv);
+  const connected = isEnvConnected(backendEnv);
+  if (connected) {
+    clearBtn.hidden = false;
+    clearBtn.disabled = false;
+    clearBtn.textContent = "Disconnect this server";
+    clearBtn.dataset.authAction = "disconnect";
+  } else if (keys) {
+    clearBtn.hidden = false;
+    clearBtn.disabled = false;
+    clearBtn.textContent = "Connect";
+    clearBtn.dataset.authAction = "connect";
+  } else {
+    clearBtn.hidden = true;
+    clearBtn.disabled = true;
+    clearBtn.textContent = "Disconnect this server";
+    clearBtn.dataset.authAction = "";
+  }
 }
 
 function syncAuthUI(accountHint) {
   const status = $("#authStatus");
   const pub = $("#authPublicKey");
   const priv = $("#authPrivateKey");
-  const active = getActiveCredentials();
-  if (pub) pub.value = active.publicKey;
-  if (priv) priv.value = active.privateKey;
-  status.classList.remove("connected", "pending");
+  const stored = credentialsByEnv[backendEnv] || { publicKey: "", privateKey: "" };
+  if (pub) pub.value = stored.publicKey || "";
+  if (priv) priv.value = stored.privateKey || "";
+  if (status) status.classList.remove("connected", "pending", "saved", "rejected");
 
-  if (active.publicKey && active.privateKey) {
+  const envTag = getEnvShortLabel();
+  const connected = isEnvConnected(backendEnv);
+  const keys = hasKeysFor(backendEnv);
+
+  if (!status) {
+    syncAuthActionButtons();
+    return;
+  }
+
+  if (accountHint === "unauthorized") {
+    status.textContent = `${envTag} — keys rejected`;
+    status.classList.add("rejected");
+    status.title = "These keys are not valid for this API server. Sign in while this server is selected.";
+  } else if (connected) {
     setJourney({ connected: true });
-    const envTag = getBackendLabel();
-    if (accountHint === "verified") {
-      status.textContent = `${envTag} · Ready`;
-      status.classList.add("connected");
-      status.title = "Keys saved — account active";
-    } else if (accountHint === "pending") {
-      status.textContent = `${envTag} · Pending`;
+    if (accountHint === "pending") {
+      status.textContent = `Connected as ${envTag} · Pending`;
       status.classList.add("pending");
       status.title = "Keys work, but Shipmozo profile is under verification";
     } else {
-      status.textContent = `${envTag} · Keys saved`;
+      status.textContent = `Connected as ${envTag}`;
       status.classList.add("connected");
-      status.title = `public-key: ${active.publicKey.slice(0, 10)}…`;
+      status.title =
+        accountHint === "verified"
+          ? "Keys saved — account active"
+          : `public-key: ${(stored.publicKey || "").slice(0, 10)}…`;
     }
-  } else if (active.publicKey || active.privateKey) {
-    status.textContent = `${getBackendLabel()} · Incomplete`;
+  } else if (keys) {
+    status.textContent = `${envTag} — keys saved, not connected`;
+    status.classList.add("saved");
+    status.title = "Keys are saved for this server. Click Connect to use them.";
+  } else if (stored.publicKey || stored.privateKey) {
+    status.textContent = `${envTag} — incomplete keys`;
     status.title = "Enter both public-key and private-key";
   } else {
     status.textContent = "Not connected";
     status.title = "Click Connect API";
   }
+  syncAuthActionButtons();
 }
 
 /** Explain Shipmozo result/message in plain language */
@@ -354,6 +499,13 @@ function interpretShipmozoResponse(payload) {
       text: "Your public-key and private-key are accepted, but Shipmozo has not activated your seller profile yet. Complete verification in the Shipmozo panel (KYC / documents). API calls will return result \"0\" until approval.",
     };
   }
+  if (msg.includes("unauthorised") || msg.includes("unauthorized")) {
+    return {
+      type: "unauthorized",
+      title: "❌ Failed: Keys not valid for this server",
+      text: "Dev and Live use different API key pairs. Sign in (or paste keys) while the matching API server is selected — Dev keys on Live return unauthorised.",
+    };
+  }
   if (msg.includes("invalid") && (msg.includes("key") || msg.includes("credential"))) {
     return {
       type: "error",
@@ -368,11 +520,30 @@ function interpretShipmozoResponse(payload) {
   };
 }
 
+function accountHintFromProbe(accountState) {
+  if (accountState === "verified") return "verified";
+  if (accountState === "pending") return "pending";
+  if (accountState === "unauthorized") return "unauthorized";
+  return undefined;
+}
+
 async function refreshAuthStatusFromKeys() {
-  const active = getActiveCredentials();
-  if (!active.publicKey || !active.privateKey) return;
+  if (!isEnvConnected(backendEnv)) {
+    syncAuthUI();
+    return;
+  }
   const accountState = await probeAccountStatus();
-  syncAuthUI(accountState === "verified" ? "verified" : accountState === "pending" ? "pending" : undefined);
+  if (accountState === "unauthorized") {
+    // Stay disconnected so the badge cannot claim Connected while Live rejects Dev-copied keys.
+    setEnvConnected(backendEnv, false);
+    syncAuthUI("unauthorized");
+    toast(
+      `${getEnvShortLabel()} rejected these keys — sign in while ${getEnvShortLabel()} is selected`,
+      "error"
+    );
+    return;
+  }
+  syncAuthUI(accountHintFromProbe(accountState));
 }
 
 async function probeAccountStatus() {
@@ -385,9 +556,10 @@ async function probeAccountStatus() {
       headers,
     });
     const payload = wrapped.data;
-    if (payload?.result === "1") return "verified";
+    if (payload?.result === "1" || payload?.result === 1) return "verified";
     const hint = interpretShipmozoResponse(payload);
     if (hint?.type === "pending") return "pending";
+    if (hint?.type === "unauthorized") return "unauthorized";
     return "unknown";
   } catch {
     return null;
@@ -412,7 +584,8 @@ async function loginWithPassword(username, password) {
 }
 
 function authHeaders() {
-  const c = getActiveCredentials();
+  if (!isEnvConnected(backendEnv)) return {};
+  const c = credentialsByEnv[backendEnv] || {};
   const h = {};
   if (c.publicKey) h["public-key"] = c.publicKey;
   if (c.privateKey) h["private-key"] = c.privateKey;
@@ -730,7 +903,7 @@ function renderRateLimitByEndpointTable() {
 function renderStaticIntro() {
   const g = portalMeta.rateLimitGlobal || { limit: 500 };
   const rlHeaders = portalMeta.rateLimitHeaders;
-  const connected = !!(getActiveCredentials().publicKey && getActiveCredentials().privateKey);
+  const connected = isEnvConnected(backendEnv);
   return `
     <div class="hero-banner">
       <div class="hero-logo-wrap">
@@ -750,7 +923,7 @@ function renderStaticIntro() {
           : `<p class="hero-start-hint">Start here: connect your keys before using the API Tester or Postman downloads.</p>`
       }
     </div>
-    <div class="note warn"><strong>Dev sandbox behavior:</strong> Dev requests run against a live sandbox. Pushing an order creates a real order and AWB on your account, so cancel test orders when you're done. Dev and Live use separate keys.</div>
+    ${renderSandboxWarningNote()}
 
     <div class="section">
       <h2>What you can build</h2>
@@ -844,7 +1017,7 @@ function renderAuthPage() {
       )}
     </div>
 
-    <div class="note warn"><strong>Dev sandbox behavior:</strong> Dev requests can create real orders and AWBs on your account. Cancel test orders when you're done. Dev and Live use separate keys.</div>
+    ${renderSandboxWarningNote()}
     <div class="note"><strong>Security:</strong> Never expose <code>private-key</code> in front-end apps or mobile clients. Call Shipmozo from your backend only.</div>`;
 }
 
@@ -856,7 +1029,9 @@ function renderWorkflowStep(step) {
         `<a href="#/execute?op=${encodeURIComponent(operation.id)}">Open ${esc(operation.summary)} in API Tester</a>`
     )
     .join(" · ");
-  return `<li><code>${esc(step)}</code>${links ? `<span class="workflow-step-links">${links}</span>` : ""}</li>`;
+  return `<li><code>${esc(step)}</code>${
+    links ? ` <span class="workflow-step-links">${links}</span>` : ""
+  }</li>`;
 }
 
 function renderWorkflows() {
@@ -1202,8 +1377,7 @@ function setJourney(patch) {
 }
 
 function syncJourneyFromAuth() {
-  const c = getActiveCredentials();
-  if (c.publicKey && c.privateKey) setJourney({ connected: true });
+  if (isEnvConnected(backendEnv)) setJourney({ connected: true });
 }
 
 function updateJourneyFromCall(item, payload) {
@@ -1269,7 +1443,7 @@ function renderTester(preselectId) {
   return `
     <div class="tester-layout">
       <h1 class="page-title">API Tester</h1>
-      <p class="page-lead">Live requests go through this portal's proxy to <code>${getApiBase()}</code> (<strong>${esc(getBackendLabel())}</strong>). Connect API keys in the header — they are sent as <code>public-key</code> and <code>private-key</code> on every call.</p>
+      <p class="page-lead">Live requests go through this portal's proxy to <code>${getApiBase()}</code>&nbsp;(<strong>${esc(getBackendLabel())}</strong>). Connect API keys in the header — they are sent as <code>public-key</code> and <code>private-key</code> on every call.</p>
       ${renderJourneyStrip()}
 
       <div class="tester-grid">
@@ -1360,10 +1534,11 @@ function bindTester(preselectId) {
     if (bodyLabel?.tagName === "LABEL") bodyLabel.classList.toggle("hidden", hideBody);
 
     const authRequired = needsAuth(item.op);
-    const creds = getActiveCredentials();
-    if (authRequired && !creds.publicKey) {
+    if (authRequired && !isEnvConnected(backendEnv)) {
       hint.className = "hint-warn";
-      hint.textContent = "Connect API keys (header button) or paste keys and click Save.";
+      hint.textContent = hasKeysFor(backendEnv)
+        ? "Keys are saved but not connected. Open Connect API and click Connect."
+        : "Connect API keys (header button) or paste keys and click Save.";
     } else if (authRequired) {
       hint.className = "hint-ok";
       hint.textContent = "API keys will be sent as public-key and private-key headers.";
@@ -1556,10 +1731,10 @@ function renderPhase1Tester(preselectId) {
   return `
     <div class="tester-layout" id="testerRoot">
       <h1 class="page-title">API Tester</h1>
-      <p class="page-lead">Requests go through this portal's proxy to <code>${getApiBase()}</code> (<strong>${esc(getBackendLabel())}</strong>). The response body below is the exact Shipmozo API body.</p>
+      <p class="page-lead">Requests go through this portal's proxy to <code>${getApiBase()}</code>&nbsp;(<strong>${esc(getBackendLabel())}</strong>). The response body below is the exact Shipmozo API body.</p>
       ${renderModeToggle(mode)}
-      <div class="tester-safety-note"><strong>Dev requests run against a live sandbox:</strong> pushing an order creates a real order and AWB on your account. Cancel test orders when you're done. Dev and Live use separate keys.</div>
-      ${renderJourneyStrip()}
+      ${renderTesterSafetyNote()}
+      ${lifecycle ? "" : renderJourneyStrip()}
 
       <div id="singleModePanel" class="${lifecycle ? "hidden" : ""}">
       <div class="tester-grid">
@@ -1617,7 +1792,22 @@ function renderPhase1Tester(preselectId) {
       </div>
 
       <div id="workflowModeMount" class="${lifecycle ? "" : "hidden"}">
-        ${lifecycle ? renderWorkflowPanel(lifecycleWorkflow, { ...loadWorkflowContext() }, {}, lifecycleWorkflow.steps[0].id) : ""}
+        ${
+          lifecycle
+            ? (() => {
+                const scenarioId = loadLifecycleScenarioId();
+                const wf = getLifecycleWorkflow(scenarioId);
+                return renderWorkflowPanel(
+                  wf,
+                  { ...loadWorkflowContext() },
+                  {},
+                  wf.steps[0].id,
+                  null,
+                  scenarioId
+                );
+              })()
+            : ""
+        }
       </div>
     </div>`;
 }
@@ -1920,10 +2110,11 @@ function bindPhase1Tester(preselectId) {
     bodyLabel?.classList.toggle("hidden", hideBody);
 
     const authRequired = needsAuth(item.op);
-    const credentials = getActiveCredentials();
-    if (authRequired && !credentials.publicKey) {
+    if (authRequired && !isEnvConnected(backendEnv)) {
       hint.className = "hint-warn";
-      hint.textContent = "Connect API keys (header button) or paste keys and click Save.";
+      hint.textContent = hasKeysFor(backendEnv)
+        ? "Keys are saved but not connected. Open Connect API and click Connect."
+        : "Connect API keys (header button) or paste keys and click Save.";
     } else if (authRequired) {
       hint.className = "hint-ok";
       hint.textContent = "API keys will be sent as public-key and private-key headers.";
@@ -2192,6 +2383,7 @@ function setModalOpen(open) {
 function openAuthDialog() {
   const dlg = $("#authDialog");
   if (!dlg) return;
+  syncAuthUI();
   setModalOpen(true);
   if (dlg.showModal) dlg.showModal();
   else dlg.setAttribute("open", "");
@@ -2228,8 +2420,8 @@ function bindAuthDialog() {
       await loginWithPassword(u, p);
       setJourney({ connected: true });
       msg.className = "auth-login-msg ok";
-      msg.textContent = "Keys saved. You can close this dialog.";
-      toast("API keys connected", "ok");
+      msg.textContent = `Connected as ${getEnvShortLabel()}. You can close this dialog.`;
+      toast(`Connected as ${getEnvShortLabel()}`, "ok");
       closeAuthDialog();
     } catch (e) {
       msg.className = "auth-login-msg error";
@@ -2249,35 +2441,78 @@ function bindAuthDialog() {
     credentials.publicKey = c.publicKey;
     credentials.privateKey = c.privateKey;
     saveCredentials();
-    setJourney({ connected: true });
     msg.className = "auth-login-msg";
     msg.textContent = "Checking account with Shipmozo…";
     const accountState = await probeAccountStatus();
-    syncAuthUI(accountState === "verified" ? "verified" : accountState === "pending" ? "pending" : undefined);
+    if (accountState === "unauthorized") {
+      setEnvConnected(backendEnv, false);
+      syncAuthUI("unauthorized");
+      msg.className = "auth-login-msg error";
+      msg.textContent = `${getEnvShortLabel()} rejected these keys. Dev and Live use different key pairs — sign in while ${getEnvShortLabel()} is selected (same username/password is fine).`;
+      toast(`${getEnvShortLabel()} rejected these keys`, "error");
+      return;
+    }
+    setJourney({ connected: true });
+    syncAuthUI(accountHintFromProbe(accountState));
     if (accountState === "pending") {
       msg.className = "auth-login-msg error";
       msg.textContent =
         "Keys are saved and valid, but your Shipmozo profile is still under verification. Complete KYC in the panel — APIs will return result 0 until approved.";
-      toast("Keys saved — account pending verification", "error");
+      toast(`Connected as ${getEnvShortLabel()} — account pending`, "error");
     } else if (accountState === "verified") {
       msg.className = "auth-login-msg ok";
-      msg.textContent = "Keys saved. Account is active.";
-      toast("Keys saved — account ready", "ok");
+      msg.textContent = `Connected as ${getEnvShortLabel()}. Account is active.`;
+      toast(`Connected as ${getEnvShortLabel()}`, "ok");
       closeAuthDialog();
     } else {
       msg.className = "auth-login-msg ok";
-      msg.textContent = "Keys saved locally.";
-      toast("API keys saved", "ok");
+      msg.textContent = `Connected as ${getEnvShortLabel()}. Keys saved locally.`;
+      toast(`Connected as ${getEnvShortLabel()}`, "ok");
       closeAuthDialog();
     }
   });
 
-  $("#authClearBtn")?.addEventListener("click", () => {
-    clearCredentials();
-    $("#authUsername").value = "";
-    $("#authPassword").value = "";
-    $("#authLoginMsg").textContent = "";
-    toast("Disconnected", "info");
+  $("#authClearBtn")?.addEventListener("click", async () => {
+    const action = $("#authClearBtn")?.dataset?.authAction;
+    const msg = $("#authLoginMsg");
+    if (action === "connect") {
+      if (!connectCurrentEnv()) {
+        toast("No saved keys for this server", "error");
+        return;
+      }
+      msg.className = "auth-login-msg";
+      msg.textContent = "Checking account with Shipmozo…";
+      const accountState = await probeAccountStatus();
+      if (accountState === "unauthorized") {
+        setEnvConnected(backendEnv, false);
+        syncAuthUI("unauthorized");
+        msg.className = "auth-login-msg error";
+        msg.textContent = `${getEnvShortLabel()} rejected the saved keys. Sign in while ${getEnvShortLabel()} is selected to fetch the correct key pair.`;
+        toast(`${getEnvShortLabel()} rejected these keys`, "error");
+        return;
+      }
+      setJourney({ connected: true });
+      syncAuthUI(accountHintFromProbe(accountState));
+      if (accountState === "pending") {
+        msg.className = "auth-login-msg error";
+        msg.textContent =
+          "Connected with saved keys, but your Shipmozo profile is still under verification.";
+        toast(`Connected as ${getEnvShortLabel()} — account pending`, "error");
+      } else {
+        msg.className = "auth-login-msg ok";
+        msg.textContent = `Connected as ${getEnvShortLabel()}.`;
+        toast(`Connected as ${getEnvShortLabel()}`, "ok");
+        closeAuthDialog();
+      }
+      return;
+    }
+    if (action === "disconnect") {
+      disconnectCurrentEnv();
+      $("#authUsername").value = "";
+      $("#authPassword").value = "";
+      msg.textContent = "";
+      toast(`${getEnvShortLabel()} disconnected — keys kept in browser`, "info");
+    }
   });
 }
 

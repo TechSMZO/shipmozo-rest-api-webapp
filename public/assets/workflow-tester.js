@@ -1,6 +1,8 @@
 import { defaultWorkflow } from "./workflowDefinitions.js";
 import {
-  lifecycleWorkflow,
+  LIFECYCLE_SCENARIOS,
+  getLifecycleScenario,
+  getLifecycleWorkflow,
   extractLifecycleResponse,
   shouldSkipSchedulePickup,
   resolveAwbNumber,
@@ -8,6 +10,27 @@ import {
 
 const WORKFLOW_CTX_KEY = "shipmozo_lifecycle_context";
 const WORKFLOW_MODE_KEY = "shipmozo_tester_mode";
+const WORKFLOW_SCENARIO_KEY = "shipmozo_lifecycle_scenario";
+
+export { LIFECYCLE_SCENARIOS, getLifecycleScenario, getLifecycleWorkflow };
+
+export function loadLifecycleScenarioId() {
+  try {
+    const id = sessionStorage.getItem(WORKFLOW_SCENARIO_KEY);
+    if (LIFECYCLE_SCENARIOS.some((s) => s.id === id)) return id;
+  } catch {
+    /* ignore */
+  }
+  return "domestic";
+}
+
+export function saveLifecycleScenarioId(id) {
+  try {
+    sessionStorage.setItem(WORKFLOW_SCENARIO_KEY, id || "domestic");
+  } catch {
+    /* ignore */
+  }
+}
 
 function esc(s) {
   const d = document.createElement("div");
@@ -49,6 +72,10 @@ function emptyContext() {
     lr_number: "",
     tracking_status: "",
     delivery_pincode: "122001",
+    return_customer_pincode: "122001",
+    return_reason_id: "",
+    consignee_country_id: "",
+    _intlRateWarned: false,
   };
 }
 
@@ -83,11 +110,15 @@ export function getMissingDeps(step, ctx, workflow) {
     if (step.id === "cancel_order" && k === "awb_number" && ctx.order_id) {
       return false;
     }
+    // International rate may warn-fail; allow Assign to be attempted (manual courier_id / explore).
+    if (step.id === "assign_courier" && k === "courier_id" && ctx._intlRateWarned) {
+      return false;
+    }
     return !ctx[k];
   });
 }
 
-function stepPillStatus(step, ctx, stepStates, runningId) {
+function stepPillStatus(step, ctx, stepStates, runningId, workflow) {
   if (runningId === step.id) return "running";
   const saved = stepStates[step.id];
   if (saved === "skipped") return "skipped";
@@ -95,7 +126,7 @@ function stepPillStatus(step, ctx, stepStates, runningId) {
   if (saved === "warn") return "warn";
   if (saved === "failed") return "failed";
   if (step.conditional === "skip_when_auto_pickup" && shouldSkipSchedulePickup(ctx)) return "skipped";
-  const missing = getMissingDeps(step, ctx, { stepDeps: lifecycleWorkflow.stepDeps });
+  const missing = getMissingDeps(step, ctx, workflow);
   if (missing.length) return "pending";
   return "ready";
 }
@@ -140,24 +171,28 @@ function renderResponseTabs(idPrefix) {
     </div>`;
 }
 
-export function renderWorkflowPanel(workflow, ctx, stepStates, selectedStepId, runningStepId = null) {
-  const isLifecycle = workflow.id === lifecycleWorkflow.id;
+export function renderWorkflowPanel(
+  workflow,
+  ctx,
+  stepStates,
+  selectedStepId,
+  runningStepId = null,
+  scenarioId = "domestic"
+) {
+  const scenario = getLifecycleScenario(scenarioId);
+  const isLifecycle = workflow.kind === "lifecycle" || LIFECYCLE_SCENARIOS.some((s) => s.workflow.id === workflow.id);
   const steps = workflow.steps;
+  const activeWorkflow = workflow;
 
   const progress = steps
     .map((s) => {
-      const st = stepPillStatus(s, ctx, stepStates, runningStepId);
+      const st = stepPillStatus(s, ctx, stepStates, runningStepId, activeWorkflow);
       return `<span class="wf-progress-item wf-st-${st}" data-step-pill="${esc(s.id)}">${esc(s.label)}</span>`;
     })
     .join('<span class="wf-progress-arrow">→</span>');
 
   const contextRows = isLifecycle
-    ? [
-        ["Warehouse ID", ctx.warehouse_id],
-        ["Internal order_id", ctx.order_id],
-        ["Courier ID", ctx.courier_id],
-        ["AWB", ctx.awb_number],
-      ]
+    ? (scenario.capturedFields || []).map((f) => [f.label, ctx[f.key]])
     : [
         ["Order ID", ctx.order_id],
         ["Reference ID", ctx.reference_id],
@@ -178,8 +213,8 @@ export function renderWorkflowPanel(workflow, ctx, stepStates, selectedStepId, r
 
   const cards = steps
     .map((step) => {
-      const st = stepPillStatus(step, ctx, stepStates, runningStepId);
-      const missing = getMissingDeps(step, ctx, workflow);
+      const st = stepPillStatus(step, ctx, stepStates, runningStepId, activeWorkflow);
+      const missing = getMissingDeps(step, ctx, activeWorkflow);
       const selected = step.id === selectedStepId ? " wf-step-selected" : "";
       let fixHtml = "";
       if (missing.length && st !== "skipped") {
@@ -203,10 +238,15 @@ export function renderWorkflowPanel(workflow, ctx, stepStates, selectedStepId, r
 
   const selected = steps.find((s) => s.id === selectedStepId) || steps[0];
   const isGet = selected.method === "GET";
+  const pinLabel = selected.deliveryPincodeLabel || "Delivery pincode";
+  const pinValue =
+    scenarioId === "return"
+      ? ctx.return_customer_pincode || ctx.delivery_pincode || "122001"
+      : ctx.delivery_pincode || "122001";
   const deliveryPin =
     selected.hasDeliveryPincode && isLifecycle
-      ? `<label for="wfDeliveryPincode">Delivery pincode</label>
-         <input type="text" id="wfDeliveryPincode" value="${esc(ctx.delivery_pincode || "122001")}" />`
+      ? `<label for="wfDeliveryPincode">${esc(pinLabel)}</label>
+         <input type="text" id="wfDeliveryPincode" value="${esc(pinValue)}" />`
       : "";
   const bodySection = isGet
     ? `<p class="muted small">This step uses <code>${esc(selected.method)}</code> — path/query parameters below.</p>
@@ -215,9 +255,18 @@ export function renderWorkflowPanel(workflow, ctx, stepStates, selectedStepId, r
        <label for="wfBody">Request body (JSON)</label>
        <textarea id="wfBody" rows="14"></textarea>`;
 
+  const scenarioOptions = LIFECYCLE_SCENARIOS.map(
+    (s) =>
+      `<option value="${esc(s.id)}"${s.id === scenario.id ? " selected" : ""}>${esc(s.label)}</option>`
+  ).join("");
+
   return `
     <div class="wf-panel">
       <div class="wf-toolbar">
+        <label class="wf-scenario-label" for="wfScenarioSelect">Scenario</label>
+        <select id="wfScenarioSelect" class="wf-scenario-select" aria-label="Lifecycle scenario">
+          ${scenarioOptions}
+        </select>
         <span class="wf-workflow-select-label">${esc(workflow.label)}</span>
         <button type="button" class="btn-secondary btn-sm" id="wfResetBtn">Reset lifecycle</button>
         <button type="button" class="btn-primary btn-sm" id="wfRunAllBtn">Run full lifecycle</button>
@@ -339,8 +388,10 @@ function renderStepResponse(root, api, ok, payload, wrapped, durationMs, step) {
 }
 
 export function bindWorkflowPanel(root, api, state) {
-  const workflow = lifecycleWorkflow;
+  const scenarioId = state?.scenarioId || loadLifecycleScenarioId();
+  const workflow = getLifecycleWorkflow(scenarioId);
   const st = state || {
+    scenarioId,
     ctx: { ...loadWorkflowContext(), ...contextFromCredentials(api.getActiveCredentials()) },
     stepStates: {},
     selectedStepId: workflow.steps[0].id,
@@ -348,6 +399,7 @@ export function bindWorkflowPanel(root, api, state) {
     runningStepId: null,
     stepResponses: new Map(),
   };
+  st.scenarioId = scenarioId;
   if (!st.stepResponses) st.stepResponses = new Map();
   let { ctx, stepStates, selectedStepId, courierNote, runningStepId } = st;
   const stepResponses = st.stepResponses;
@@ -364,7 +416,17 @@ export function bindWorkflowPanel(root, api, state) {
     persist();
   }
 
+  function resetLifecycleState({ keepKeys = true } = {}) {
+    const keys = keepKeys ? { public_key: ctx.public_key, private_key: ctx.private_key } : {};
+    ctx = { ...emptyContext(), ...keys, ...contextFromCredentials(api.getActiveCredentials()) };
+    stepStates = {};
+    courierNote = "";
+    stepResponses.clear();
+    persist();
+  }
+
   function rebuild() {
+    st.scenarioId = scenarioId;
     st.ctx = ctx;
     st.stepStates = stepStates;
     st.selectedStepId = selectedStepId;
@@ -373,18 +435,45 @@ export function bindWorkflowPanel(root, api, state) {
     st.stepResponses = stepResponses;
     const mount = root.querySelector("#workflowModeMount");
     if (!mount) return;
-    mount.innerHTML = renderWorkflowPanel(workflow, ctx, stepStates, selectedStepId, runningStepId);
+    mount.innerHTML = renderWorkflowPanel(
+      workflow,
+      ctx,
+      stepStates,
+      selectedStepId,
+      runningStepId,
+      scenarioId
+    );
     bindWorkflowPanel(root, api, st);
   }
 
   function buildStepBody(step) {
     if (step.buildSampleBody) {
       const delivery = $("#wfDeliveryPincode")?.value || ctx.delivery_pincode || "122001";
-      if (step.hasDeliveryPincode) ctx.delivery_pincode = delivery;
+      if (step.hasDeliveryPincode) {
+        if (scenarioId === "return") {
+          ctx.return_customer_pincode = delivery;
+          ctx.delivery_pincode = delivery;
+        } else {
+          ctx.delivery_pincode = delivery;
+        }
+      }
       return JSON.parse(JSON.stringify(step.buildSampleBody(ctx, delivery)));
     }
     const body = JSON.parse(JSON.stringify(step.sampleBody || {}));
-    if (step.id === "push_order" && ctx.warehouse_id) body.warehouse_id = String(ctx.warehouse_id);
+    if (
+      (step.id === "push_order" ||
+        step.id === "push_return_order" ||
+        step.id === "international_push_order") &&
+      ctx.warehouse_id
+    ) {
+      body.warehouse_id = String(ctx.warehouse_id);
+    }
+    if (step.id === "push_return_order" && ctx.return_reason_id) {
+      body.return_reason_id = Number(ctx.return_reason_id) || ctx.return_reason_id;
+    }
+    if (step.id === "international_push_order" && ctx.consignee_country_id) {
+      body.consignee_country_id = String(ctx.consignee_country_id);
+    }
     if (step.id === "assign_courier") {
       if (ctx.order_id) body.order_id = ctx.order_id;
       if (ctx.courier_id) body.courier_id = Number(ctx.courier_id) || ctx.courier_id;
@@ -517,7 +606,11 @@ export function bindWorkflowPanel(root, api, state) {
     if (!result.ok) {
       const warn = step.warnOnFail;
       el.className = warn ? "response-summary warn" : "response-summary error";
-      const msg = api.interpretShipmozoResponse?.(result.payload)?.text || result.payload?.message || "Request failed";
+      const msg =
+        (warn && step.warnOnFailMessage) ||
+        api.interpretShipmozoResponse?.(result.payload)?.text ||
+        result.payload?.message ||
+        "Request failed";
       el.innerHTML = `<strong>${warn ? "Warning" : "Failed"}</strong><p>${esc(msg)}</p>`;
       return;
     }
@@ -525,47 +618,17 @@ export function bindWorkflowPanel(root, api, state) {
     el.innerHTML = `<strong>Success</strong><p>${esc(result.payload?.message || "Request succeeded")}</p>`;
   }
 
-  async function runStep(step, silent = false) {
-    if (!silent) {
-      runningStepId = step.id;
-      rebuild();
-    }
-    try {
-      const result = await executeStep(step);
-      if (result.skipped) {
-        stepStates[step.id] = "skipped";
-        if (!silent) renderSummary(step, result);
-        return result;
-      }
-      const ok = result.ok;
-      if (step.warnOnFail && !ok) stepStates[step.id] = "warn";
-      else stepStates[step.id] = ok ? "success" : "failed";
-
-        if (ok) {
-          await applyStepCapture(step, result);
-        }
-
-      stepResponses.set(step.id, { step, result });
-
-      if (!silent) {
-        renderSummary(step, result);
-        $("#wfMeta").textContent = `${result.wrapped?.status || ""} ${result.path || ""} · ${Math.round(result.durationMs)} ms`.trim();
-        renderStepResponse(root, api, ok, result.payload, result.wrapped, result.durationMs, step);
-      }
-      return result;
-    } finally {
-      if (!silent) {
-        runningStepId = null;
-        rebuild();
-      }
-    }
-  }
-
   async function applyStepCapture(step, result) {
     const captured = extractLifecycleResponse(result.payload, step);
     if (captured._courierNote) {
       courierNote = captured._courierNote;
       delete captured._courierNote;
+    }
+    if (captured._observedOrderShape) {
+      courierNote =
+        (courierNote ? `${courierNote} ` : "") +
+        `Order id field shape: ${captured._observedOrderShape}`;
+      delete captured._observedOrderShape;
     }
     Object.assign(ctx, captured);
     if (step.id === "assign_courier" && !ctx.awb_number) {
@@ -588,6 +651,52 @@ export function bindWorkflowPanel(root, api, state) {
     persist();
   }
 
+  async function runStep(step, silent = false) {
+    if (!silent) {
+      runningStepId = step.id;
+      rebuild();
+    }
+    try {
+      const result = await executeStep(step);
+      if (result.skipped) {
+        stepStates[step.id] = "skipped";
+        if (!silent) renderSummary(step, result);
+        return result;
+      }
+      const ok = result.ok;
+      if (step.warnOnFail && !ok) {
+        stepStates[step.id] = "warn";
+        if (step.id === "international_rate_calculator") {
+          ctx._intlRateWarned = true;
+          courierNote =
+            step.warnOnFailMessage ||
+            "International rate request format unconfirmed — enter courier_id manually if needed.";
+          persist();
+        }
+      } else {
+        stepStates[step.id] = ok ? "success" : "failed";
+      }
+
+      if (ok) {
+        await applyStepCapture(step, result);
+      }
+
+      stepResponses.set(step.id, { step, result });
+
+      if (!silent) {
+        renderSummary(step, result);
+        $("#wfMeta").textContent = `${result.wrapped?.status || ""} ${result.path || ""} · ${Math.round(result.durationMs)} ms`.trim();
+        renderStepResponse(root, api, ok, result.payload, result.wrapped, result.durationMs, step);
+      }
+      return result;
+    } finally {
+      if (!silent) {
+        runningStepId = null;
+        rebuild();
+      }
+    }
+  }
+
   async function runLifecycleStep(step, { silent = false } = {}) {
     if (step.conditional === "skip_when_auto_pickup" && shouldSkipSchedulePickup(ctx)) {
       stepStates[step.id] = "skipped";
@@ -608,8 +717,18 @@ export function bindWorkflowPanel(root, api, state) {
     }
 
     const ok = result.ok;
-    if (step.warnOnFail && !ok) stepStates[step.id] = "warn";
-    else stepStates[step.id] = ok ? "success" : "failed";
+    if (step.warnOnFail && !ok) {
+      stepStates[step.id] = "warn";
+      if (step.id === "international_rate_calculator") {
+        ctx._intlRateWarned = true;
+        courierNote =
+          step.warnOnFailMessage ||
+          "International rate request format unconfirmed — enter courier_id manually if needed.";
+        persist();
+      }
+    } else {
+      stepStates[step.id] = ok ? "success" : "failed";
+    }
 
     if (ok) {
       await applyStepCapture(step, result);
@@ -735,14 +854,41 @@ export function bindWorkflowPanel(root, api, state) {
   });
 
   $("#wfResetBtn")?.addEventListener("click", () => {
-    const keys = { public_key: ctx.public_key, private_key: ctx.private_key };
-    ctx = { ...emptyContext(), ...keys };
-    stepStates = {};
-    courierNote = "";
-    persist();
+    resetLifecycleState({ keepKeys: true });
     selectedStepId = workflow.steps[0].id;
     api.toast?.("Lifecycle reset (API keys kept)", "info");
     rebuild();
+  });
+
+  $("#wfScenarioSelect")?.addEventListener("change", (e) => {
+    const next = e.target.value;
+    if (!LIFECYCLE_SCENARIOS.some((s) => s.id === next)) return;
+    saveLifecycleScenarioId(next);
+    resetLifecycleState({ keepKeys: true });
+    st.scenarioId = next;
+    selectedStepId = getLifecycleWorkflow(next).steps[0].id;
+    api.toast?.(`Scenario: ${getLifecycleScenario(next).label}`, "info");
+    // Re-bind with new scenario (workflow closed over old id — force via st)
+    const mount = root.querySelector("#workflowModeMount");
+    if (!mount) return;
+    const nextWorkflow = getLifecycleWorkflow(next);
+    mount.innerHTML = renderWorkflowPanel(
+      nextWorkflow,
+      ctx,
+      stepStates,
+      selectedStepId,
+      null,
+      next
+    );
+    bindWorkflowPanel(root, api, {
+      scenarioId: next,
+      ctx,
+      stepStates,
+      selectedStepId,
+      courierNote: "",
+      runningStepId: null,
+      stepResponses,
+    });
   });
 
   $("#wfRunAllBtn")?.addEventListener("click", () => runFullLifecycle());
@@ -770,15 +916,15 @@ export function renderModeToggle(currentMode) {
     </div>`;
 }
 
-export function renderConnectionBar(proxyOk, keysOk) {
+export function renderConnectionBar(proxyOk, keysOk, envLabel = "") {
   let status = "proxy-unavailable";
   let label = "Proxy unavailable";
   if (proxyOk && keysOk) {
     status = "connected";
-    label = "API connected";
+    label = envLabel ? `Connected as ${envLabel}` : "Connected";
   } else if (!keysOk && proxyOk) {
     status = "keys-missing";
-    label = "Keys missing";
+    label = "Not connected";
   }
   return `<span class="api-conn-status api-conn-${status}" id="apiConnStatus" title="Connection status">● ${label}</span>`;
 }
