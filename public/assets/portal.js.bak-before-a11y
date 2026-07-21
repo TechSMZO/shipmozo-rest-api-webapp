@@ -1,19 +1,19 @@
 import {
-  renderModeToggle,
-  getSavedTesterMode,
-  saveTesterMode,
-  renderWorkflowPanel,
   bindWorkflowPanel,
+  getSavedTesterMode,
   loadWorkflowContext,
-} from "./workflow-tester.js?v=27";
-import { lifecycleWorkflow } from "./lifecycle-workflow.js?v=27";
-import { loadFieldContracts, renderFieldContract, renderFieldContractCollapsible } from "./field-contract-renderer.js?v=27";
-import { renderDemoPage, bindDemoPage } from "./demo-player.js?v=27";
+  renderConnectionBar,
+  renderModeToggle,
+  renderWorkflowPanel,
+  saveTesterMode,
+} from "./workflow-tester.js";
+import { defaultWorkflow } from "./workflowDefinitions.js";
 
 const API_BACKENDS = {
   dev: { label: "Dev server", baseUrl: "https://appiify.com/app/api/v1" },
   live: { label: "Live server", baseUrl: "https://shipping-api.com/app/api/v1" },
 };
+
 const AUTH_STORAGE = "shipmozo_api_keys";
 const BACKEND_STORAGE = "shipmozo_api_backend";
 /** Static file works even when a generic static server is used; /api/spec.json needs node server.js */
@@ -56,15 +56,35 @@ function renderPostmanActions(compact = false) {
 let spec = null;
 let portalMeta = null;
 let operations = [];
-let fieldContracts = null;
-let fieldHints = null;
-let scenarios = null;
 let credentialsByEnv = {
   dev: { publicKey: "", privateKey: "" },
   live: { publicKey: "", privateKey: "" },
 };
 let credentials = credentialsByEnv.dev;
 let backendEnv = "dev";
+let proxyHealthy = false;
+
+function authStorage() {
+  try {
+    return sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function clearLegacyKeyStorage() {
+  try {
+    localStorage.removeItem(AUTH_STORAGE);
+  } catch {
+    /* ignore */
+  }
+}
+
+function maskKeyDisplay(k) {
+  if (!k) return "";
+  if (k.length <= 8) return "••••••••";
+  return `${k.slice(0, 6)}…`;
+}
 
 function getApiBase() {
   return API_BACKENDS[backendEnv]?.baseUrl || API_BACKENDS.dev.baseUrl;
@@ -91,7 +111,6 @@ function saveBackend(env) {
   applyActiveCredentials();
   syncBackendUI();
   syncAuthUI();
-  refreshAuthStatusFromKeys();
   $("#authUsername") && ($("#authUsername").value = "");
   $("#authPassword") && ($("#authPassword").value = "");
   $("#authLoginMsg") && ($("#authLoginMsg").textContent = "");
@@ -144,11 +163,11 @@ async function fetchJson(url, options) {
 }
 
 function getActiveCredentials() {
-  const pubInput = $("#authPublicKey")?.value?.trim();
-  const privInput = $("#authPrivateKey")?.value?.trim();
+  const pub = $("#authPublicKey")?.value?.trim();
+  const priv = $("#authPrivateKey")?.value?.trim();
   return {
-    publicKey: pubInput || credentials.publicKey,
-    privateKey: privInput || credentials.privateKey,
+    publicKey: pub || credentials.publicKey,
+    privateKey: priv || credentials.privateKey,
   };
 }
 
@@ -228,11 +247,15 @@ function persistCredentialsToStore() {
     privateKey: c.privateKey || "",
   };
   credentials = credentialsByEnv[backendEnv];
-  try {
-    localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
-  } catch {
-    /* ignore quota errors */
+  const store = authStorage();
+  if (store) {
+    try {
+      store.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
+    } catch {
+      /* ignore quota errors */
+    }
   }
+  clearLegacyKeyStorage();
 }
 
 function loadCredentials() {
@@ -240,13 +263,14 @@ function loadCredentials() {
     dev: { publicKey: "", privateKey: "" },
     live: { publicKey: "", privateKey: "" },
   };
-  let migratedFromSession = false;
+  const store = authStorage();
   try {
-    let raw = localStorage.getItem(AUTH_STORAGE);
+    let raw = store?.getItem(AUTH_STORAGE);
+    let migrated = false;
     if (!raw) {
       try {
-        raw = sessionStorage.getItem(AUTH_STORAGE);
-        if (raw) migratedFromSession = true;
+        raw = localStorage.getItem(AUTH_STORAGE);
+        if (raw) migrated = true;
       } catch {
         /* ignore */
       }
@@ -264,10 +288,9 @@ function loadCredentials() {
         credentialsByEnv.dev = { ...legacy };
         credentialsByEnv.live = { ...legacy };
       }
-      if (migratedFromSession) {
+      if (migrated && store) {
         try {
-          localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
-          sessionStorage.removeItem(AUTH_STORAGE);
+          store.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
         } catch {
           /* ignore */
         }
@@ -279,6 +302,7 @@ function loadCredentials() {
       live: { publicKey: "", privateKey: "" },
     };
   }
+  clearLegacyKeyStorage();
   applyActiveCredentials();
   syncAuthUI();
 }
@@ -291,11 +315,15 @@ function saveCredentials() {
 function clearCredentials() {
   credentials = { publicKey: "", privateKey: "" };
   credentialsByEnv[backendEnv] = { ...credentials };
-  try {
-    localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
-  } catch {
-    /* ignore */
+  const store = authStorage();
+  if (store) {
+    try {
+      store.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
+    } catch {
+      /* ignore */
+    }
   }
+  clearLegacyKeyStorage();
   syncAuthUI();
 }
 
@@ -303,13 +331,17 @@ function syncAuthUI(accountHint) {
   const status = $("#authStatus");
   const pub = $("#authPublicKey");
   const priv = $("#authPrivateKey");
+  if (pub) {
+    pub.value = credentials.publicKey;
+    if (credentials.publicKey && document.activeElement !== pub) {
+      pub.placeholder = maskKeyDisplay(credentials.publicKey);
+    }
+  }
+  if (priv) priv.value = credentials.privateKey;
   const active = getActiveCredentials();
-  if (pub) pub.value = active.publicKey;
-  if (priv) priv.value = active.privateKey;
   status.classList.remove("connected", "pending");
 
   if (active.publicKey && active.privateKey) {
-    setJourney({ connected: true });
     const envTag = getBackendLabel();
     if (accountHint === "verified") {
       status.textContent = `${envTag} · Ready`;
@@ -322,7 +354,7 @@ function syncAuthUI(accountHint) {
     } else {
       status.textContent = `${envTag} · Keys saved`;
       status.classList.add("connected");
-      status.title = `public-key: ${active.publicKey.slice(0, 10)}…`;
+      status.title = `public-key: ${maskKeyDisplay(active.publicKey)}`;
     }
   } else if (active.publicKey || active.privateKey) {
     status.textContent = `${getBackendLabel()} · Incomplete`;
@@ -331,48 +363,53 @@ function syncAuthUI(accountHint) {
     status.textContent = "Not connected";
     status.title = "Click Connect API";
   }
+  updateConnectionStatus();
+}
+
+function updateConnectionStatus() {
+  const el = $("#apiConnStatus");
+  if (!el) return;
+  const active = getActiveCredentials();
+  const keysOk = !!(active.publicKey && active.privateKey);
+  let status = "proxy-unavailable";
+  let label = "Proxy unavailable";
+  if (proxyHealthy && keysOk) {
+    status = "connected";
+    label = "API connected";
+  } else if (!keysOk && proxyHealthy) {
+    status = "keys-missing";
+    label = "Keys missing";
+  }
+  el.className = `api-conn-status api-conn-${status}`;
+  el.textContent = `● ${label}`;
 }
 
 /** Explain Shipmozo result/message in plain language */
 function interpretShipmozoResponse(payload) {
   if (!payload || typeof payload !== "object") return null;
-  const message = payload.message || "";
-  const msg = message.toLowerCase();
-  const failureReason = payload.data?.error || message || "The API returned result 0.";
-  if (payload.result === "1" || payload.result === 1) {
-    const genericSuccess = !message || /^success\.?$/i.test(message.trim());
-    return {
-      type: "ok",
-      title: "✅ Success",
-      text: genericSuccess ? "Request succeeded." : message,
-    };
+  const msg = (payload.message || "").toLowerCase();
+  if (payload.result === "1") {
+    return { type: "ok", title: "Success", text: payload.message || "Request succeeded." };
   }
   if (msg.includes("under verification") || msg.includes("profile is under")) {
     return {
       type: "pending",
-      title: "⏳ Account pending verification (not an API key issue)",
+      title: "Account pending verification (not an API key issue)",
       text: "Your public-key and private-key are accepted, but Shipmozo has not activated your seller profile yet. Complete verification in the Shipmozo panel (KYC / documents). API calls will return result \"0\" until approval.",
     };
   }
   if (msg.includes("invalid") && (msg.includes("key") || msg.includes("credential"))) {
     return {
       type: "error",
-      title: "❌ Failed: Invalid API keys",
+      title: "Invalid API keys",
       text: "Shipmozo rejected the keys. Copy fresh keys from Panel → Profile or sign in again.",
     };
   }
   return {
     type: "error",
-    title: `❌ Failed: ${failureReason}`,
-    text: "HTTP status can still be 200 — check result, then data.error or message.",
+    title: "Request failed",
+    text: payload.message || "result is 0 — see response data for details.",
   };
-}
-
-async function refreshAuthStatusFromKeys() {
-  const active = getActiveCredentials();
-  if (!active.publicKey || !active.privateKey) return;
-  const accountState = await probeAccountStatus();
-  syncAuthUI(accountState === "verified" ? "verified" : accountState === "pending" ? "pending" : undefined);
 }
 
 async function probeAccountStatus() {
@@ -419,48 +456,6 @@ function authHeaders() {
   return h;
 }
 
-function getWorkflowCategories() {
-  const configured = portalMeta?.navigation?.categories || [];
-  return [
-    ...configured.map((category, index) => ({ ...category, order: index })),
-    { id: "other-apis", label: "Other APIs", keywords: [], order: Number.MAX_SAFE_INTEGER },
-  ];
-}
-
-function getWorkflowGroups(items = operations) {
-  const categories = getWorkflowCategories();
-  const categoriesById = new Map(categories.map((category) => [category.id, category]));
-  const grouped = new Map(categories.map((category) => [category.id, []]));
-
-  items.forEach((item) => {
-    const categoryId = categoriesById.has(item.workflowCategoryId) ? item.workflowCategoryId : "other-apis";
-    grouped.get(categoryId).push(item);
-  });
-
-  return categories
-    .map((category) => ({
-      ...category,
-      items: (grouped.get(category.id) || []).sort(
-        (a, b) => a.workflowOrder - b.workflowOrder || a.summary.localeCompare(b.summary)
-      ),
-    }))
-    .filter((category) => category.items.length);
-}
-
-function matchesWorkflowSearch(item, query) {
-  if (!query) return true;
-  return [
-    item.method,
-    item.path,
-    item.summary,
-    item.workflowCategoryLabel,
-    ...(item.workflowKeywords || []),
-  ]
-    .join(" ")
-    .toLowerCase()
-    .includes(query);
-}
-
 async function loadSpec() {
   let lastError;
   for (const url of SPEC_URLS) {
@@ -469,14 +464,10 @@ async function loadSpec() {
       if (!data?.paths) throw new Error("Spec missing paths");
       spec = data;
       portalMeta = spec["x-portal"] || {};
-      const categoryById = new Map(getWorkflowCategories().map((category) => [category.id, category]));
-      const operationNavigation = portalMeta.navigation?.operations || {};
       operations = [];
       for (const [pathKey, methods] of Object.entries(spec.paths || {})) {
         for (const [method, op] of Object.entries(methods)) {
           if (["get", "post", "put", "patch", "delete"].includes(method)) {
-            const navigation = operationNavigation[op.operationId] || {};
-            const category = categoryById.get(navigation.category) || categoryById.get("other-apis");
             operations.push({
               id: `${method}-${pathKey}`.replace(/[{}]/g, ""),
               method: method.toUpperCase(),
@@ -484,20 +475,10 @@ async function loadSpec() {
               op,
               tag: (op.tags && op.tags[0]) || "Other",
               summary: op.summary || pathKey,
-              workflowCategoryId: category.id,
-              workflowCategoryLabel: category.label,
-              workflowKeywords: [...(category.keywords || []), ...(navigation.keywords || [])],
-              workflowOrder: navigation.order ?? Number.MAX_SAFE_INTEGER,
             });
           }
         }
       }
-      operations.sort((a, b) => {
-        const categoryDifference =
-          (categoryById.get(a.workflowCategoryId)?.order ?? Number.MAX_SAFE_INTEGER) -
-          (categoryById.get(b.workflowCategoryId)?.order ?? Number.MAX_SAFE_INTEGER);
-        return categoryDifference || a.workflowOrder - b.workflowOrder || a.summary.localeCompare(b.summary);
-      });
       return;
     } catch (e) {
       lastError = new Error(`${url}: ${e.message}`);
@@ -586,17 +567,10 @@ function needsAuth(op) {
   return op.security !== undefined && op.security.length > 0;
 }
 
-function maskHeaderValue(name, value) {
-  if (!value || !["public-key", "private-key"].includes(name.toLowerCase()) || /^YOUR_/i.test(value)) {
-    return value;
-  }
-  return `${value.slice(0, 3)}••••`;
-}
-
 function buildCurl(method, url, headers, body) {
   let s = `curl -X ${method} "${url}"`;
   for (const [k, v] of Object.entries(headers)) {
-    if (v) s += ` \\\n  -H "${k}: ${maskHeaderValue(k, v)}"`;
+    if (v) s += ` \\\n  -H "${k}: ${v}"`;
   }
   if (body)
     s += ` \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify(body).replace(/'/g, "'\\''")}'`;
@@ -701,36 +675,27 @@ function formatRateLimitLine(op) {
 function renderRateLimitByEndpointTable() {
   const rows = portalMeta.rateLimitsByEndpoint || [];
   if (!rows.length) return "";
-  const rowsByOperationId = new Map(rows.map((row) => [row.operationId, row]));
-  const renderTable = (items) => `<table class="rate-api-table">
+  return `<table class="rate-api-table">
     <thead><tr><th>Method</th><th>Path</th><th>Limit</th><th>Auth</th><th>Notes</th></tr></thead>
     <tbody>
-      ${items
+      ${rows
         .map(
-          (item) => {
-            const row = rowsByOperationId.get(item.op.operationId) || {};
-            return `<tr>
-          <td><span class="method-badge method-${item.method}">${item.method}</span></td>
-          <td><code>${esc(item.path)}</code></td>
-          <td><strong>${esc(String(row.limit ?? 500))}</strong> <span class="muted small">(shared)</span></td>
-          <td>${needsAuth(item.op) ? "Keys" : "—"}</td>
-          <td class="muted small">${esc(row.notes || "")}</td>
+          (r) => `<tr>
+          <td><span class="method-badge method-${r.method}">${r.method}</span></td>
+          <td><code>${esc(r.path)}</code></td>
+          <td><strong>${r.limit}</strong> <span class="muted small">(shared)</span></td>
+          <td>${r.auth ? "Keys" : "—"}</td>
+          <td class="muted small">${esc(r.notes || "")}</td>
         </tr>`
-          }
         )
         .join("")}
     </tbody>
   </table>`;
-
-  return getWorkflowGroups()
-    .map((category) => `<h3 class="rate-category-title">${esc(category.label)}</h3>${renderTable(category.items)}`)
-    .join("");
 }
 
 function renderStaticIntro() {
   const g = portalMeta.rateLimitGlobal || { limit: 500 };
   const rlHeaders = portalMeta.rateLimitHeaders;
-  const connected = !!(getActiveCredentials().publicKey && getActiveCredentials().privateKey);
   return `
     <div class="hero-banner">
       <div class="hero-logo-wrap">
@@ -739,18 +704,11 @@ function renderStaticIntro() {
       <h2>Developer portal</h2>
       <p>Integrate orders, couriers, tracking, warehouses, and returns. Connect your API keys and test live from the browser.</p>
       <div class="hero-actions">
-        <button type="button" class="btn-primary" id="heroConnectBtn">${connected ? "Manage API keys" : "Connect API keys"}</button>
+        <button type="button" class="btn-primary" id="heroConnectBtn">Connect API keys</button>
         <a href="#/execute" class="btn-secondary">Open API Tester</a>
-        <a href="#/demo" class="btn-secondary">Run Demo</a>
         ${renderPostmanActions(true)}
       </div>
-      ${
-        connected
-          ? ""
-          : `<p class="hero-start-hint">Start here: connect your keys before using the API Tester or Postman downloads.</p>`
-      }
     </div>
-    <div class="note warn"><strong>Dev sandbox behavior:</strong> Dev requests run against a live sandbox. Pushing an order creates a real order and AWB on your account, so cancel test orders when you're done. Dev and Live use separate keys.</div>
 
     <div class="section">
       <h2>What you can build</h2>
@@ -767,11 +725,6 @@ function renderStaticIntro() {
         <label>${esc(getBackendLabel())}</label>
         <code>${getApiBase()}</code>
       </div>
-      <p class="base-url-note">
-        <strong>Dev</strong> (<code>appiify.com</code>) is the staging host used by this portal when Dev is selected.
-        <strong>Live</strong> (<code>shipping-api.com</code>) is the production API documented for go-live.
-        Switch servers in the header — API Tester and code samples follow the selection. Keys are stored separately per environment.
-      </p>
       <p class="muted small">Switch between <strong>Dev</strong> and <strong>Live</strong> in the header. API Tester and code samples use the selected server.</p>
       <div class="note warn"><strong>No trailing slash.</strong> Using <code>.../v1/</code> can cause CORS failures in browsers.</div>
     </div>
@@ -801,7 +754,7 @@ function renderStaticIntro() {
               .join("")}</tbody></table>`
           : ""
       }
-      <p style="margin-top:16px"><a href="#/errors">Error codes →</a></p>
+      <p style="margin-top:16px"><a href="#/rate-limits">Per-API rate limit table →</a> · <a href="#/errors">Error codes →</a></p>
     </div>
 
     <div class="section">
@@ -844,19 +797,7 @@ function renderAuthPage() {
       )}
     </div>
 
-    <div class="note warn"><strong>Dev sandbox behavior:</strong> Dev requests can create real orders and AWBs on your account. Cancel test orders when you're done. Dev and Live use separate keys.</div>
     <div class="note"><strong>Security:</strong> Never expose <code>private-key</code> in front-end apps or mobile clients. Call Shipmozo from your backend only.</div>`;
-}
-
-function renderWorkflowStep(step) {
-  const targets = operations.filter((operation) => step.includes(operation.path));
-  const links = targets
-    .map(
-      (operation) =>
-        `<a href="#/execute?op=${encodeURIComponent(operation.id)}">Open ${esc(operation.summary)} in API Tester</a>`
-    )
-    .join(" · ");
-  return `<li><code>${esc(step)}</code>${links ? `<span class="workflow-step-links">${links}</span>` : ""}</li>`;
 }
 
 function renderWorkflows() {
@@ -870,7 +811,7 @@ function renderWorkflows() {
       <div class="section flow-card">
         <h2>${esc(f.title)}</h2>
         <ol class="flow-steps">
-          ${f.steps.map(renderWorkflowStep).join("")}
+          ${f.steps.map((s) => `<li><code>${esc(s)}</code></li>`).join("")}
         </ol>
       </div>`
       )
@@ -934,7 +875,7 @@ function renderErrors() {
   return `
     <h1 class="page-title">Error codes &amp; troubleshooting</h1>
     <p class="page-lead">Shipmozo returns HTTP 200 with <code>result: "0"</code> for business errors. Use <code>message</code> and <code>data.error</code> for details.</p>
-    
+    <p><a href="#/rate-limits">View all API rate limits →</a></p>
 
     <div class="section">
       <h2>Error reference</h2>
@@ -964,7 +905,7 @@ function renderBestPractices() {
       <ol>
         <li>Always check <code>result === "1"</code> before reading <code>data</code>.</li>
         <li>Use unique <code>order_id</code> values from your OMS — they are the join key across APIs.</li>
-        <li>Call <code>pincode-serviceability</code> and <code>rate-calculator</code> before <code>push-order</code> at checkout.</li>
+        <li>Call <code>rate-calculator</code> before <code>push-order</code> to choose the best courier.</li>
         <li>Store <code>awb_number</code> from assign / auto-assign for tracking and labels.</li>
         <li>If <code>pickups_automatically_scheduled</code> is <code>NO</code>, call <code>schedule-pickup</code> after assign.</li>
         <li>Implement exponential backoff on rate-limit and 5xx responses.</li>
@@ -1069,108 +1010,82 @@ function renderEndpoint(item) {
       </div>
 
       <p style="margin-top:24px"><a href="#/execute?op=${encodeURIComponent(item.id)}" class="btn-primary inline-btn">Test this API →</a></p>
-      ${renderFieldContract(op.operationId, fieldContracts)}
     </article>`;
 }
 
-const JOURNEY_STORAGE = "shipmozo_portal_journey_v1";
-const DEFAULT_TESTER_OPERATION_ID = "get-/info";
+function renderTester(preselectId) {
+  const mode = getSavedTesterMode();
+  const opts = operations
+    .map((o) => `<option value="${o.id}" ${o.id === preselectId ? "selected" : ""}>${o.method} ${o.path} — ${esc(o.summary)}</option>`)
+    .join("");
+  const active = getActiveCredentials();
+  const connBar = renderConnectionBar(proxyHealthy, !!(active.publicKey && active.privateKey));
 
-const TESTER_ENUM_OPTIONS = {
-  payment_type: ["PREPAID", "COD"],
-  shipment_type: ["FORWARD", "RETURN"],
-  type_of_package: ["SPS", "B2B", "MPS"],
-  rov_type: ["ROV_OWNER", "ROV_CARRIER"],
-  order_type: ["ESSENTIALS", "NON ESSENTIALS"],
-  shipment_purpose: ["SCSB4", "CSB5", "DSCB4"],
-};
+  return `
+    <div class="tester-layout" id="testerRoot">
+      <h1 class="page-title">API Tester</h1>
+      <div class="tester-conn-row">${connBar}
+        <button type="button" class="btn-ghost btn-sm" id="testerConnectBtn">Connect API</button>
+        <button type="button" class="btn-ghost btn-sm" id="testerClearKeysBtn">Clear Keys</button>
+      </div>
+      <p class="page-lead muted small">API keys are stored only for this browser session (sessionStorage) and are never stored on the server.</p>
+      <p class="page-lead">Live requests go through this portal's proxy to <code>${getApiBase()}</code> (<strong>${esc(getBackendLabel())}</strong>).</p>
 
-const TESTER_UNIT_FACTS = {
-  "/push-order": "Weight is in grams. Dimensions (length, width, height) are in cm. Dates use YYYY-MM-DD.",
-  "/rate-calculator": "Weight is in grams. Dimensions (length, width, height) are in cm.",
-  "/push-return-order": "Weight is in kg. Dimensions (length, width, height) are in cm. Dates use YYYY-MM-DD.",
-};
+      ${renderModeToggle(mode)}
 
-const TESTER_PREREQS = {
-  "/push-order": {
-    text: 'Needs a valid warehouse_id. Get one from Get Warehouses (use the one with default: YES).',
-    links: [{ opId: "get-/get-warehouses", label: "Get Warehouses" }],
-  },
-  "/push-return-order": {
-    text: "Needs a return_reason_id from Get Return Reason. Weight here is in kg (unlike Push Order, which uses grams).",
-    links: [
-      { opId: "get-/get-return-reason", label: "Get Return Reason" },
-      { opId: "get-/get-warehouses", label: "Get Warehouses" },
-    ],
-  },
-  "/assign-courier": {
-    text: "Needs the internal order_id from Push Order's response, and a courier_id from Rate Calculator.",
-    links: [
-      { opId: "post-/push-order", label: "Push Order" },
-      { opId: "post-/rate-calculator", label: "Rate Calculator" },
-    ],
-  },
-  "/auto-assign-order": {
-    text: "You'll need: an order created via Push Order first.",
-    links: [{ opId: "post-/push-order", label: "Push Order" }],
-  },
-  "/schedule-pickup": {
-    text: "Only needed if the chosen courier's pickups_automatically_scheduled is NO in Rate Calculator. Otherwise the AWB is already assigned.",
-    links: [{ opId: "post-/rate-calculator", label: "Rate Calculator" }],
-  },
-  "/cancel-order": {
-    text: "Needs the internal order_id and the awb_number from Assign Courier.",
-    links: [{ opId: "post-/assign-courier", label: "Assign Courier" }],
-  },
-  "/get-order-label/{awb_number}": {
-    text: "Needs the awb_number from Assign Courier or Schedule Pickup.",
-    links: [
-      { opId: "post-/assign-courier", label: "Assign Courier" },
-      { opId: "post-/schedule-pickup", label: "Schedule Pickup" },
-    ],
-  },
-  "/track-order": {
-    text: "Needs the awb_number from Assign Courier or Schedule Pickup.",
-    links: [
-      { opId: "post-/assign-courier", label: "Assign Courier" },
-      { opId: "post-/schedule-pickup", label: "Schedule Pickup" },
-    ],
-  },
-  "/order/update-warehouse": {
-    text: "Needs the internal order_id from Push Order and a warehouse_id from Get Warehouses.",
-    links: [
-      { opId: "post-/push-order", label: "Push Order" },
-      { opId: "get-/get-warehouses", label: "Get Warehouses" },
-    ],
-  },
-};
+      <div id="singleModePanel" class="${mode === "single" ? "" : "hidden"}">
+        <div class="tester-grid">
+          <div class="card tester-form" id="testerForm">
+            <label>API endpoint</label>
+            <select id="testerOp">${opts}</select>
+            <div id="testerDepWarning"></div>
+            <div id="testerParams"></div>
+            <label>Request body (JSON)</label>
+            <textarea id="testerBody" rows="12" placeholder="{}"></textarea>
+            <div class="tester-actions">
+              <button type="button" class="btn-primary" id="testerRun">Execute API</button>
+              <button type="button" class="btn-secondary" id="testerCurl">Copy cURL</button>
+              <button type="button" class="btn-secondary" id="testerRateBtn">Check rate limit</button>
+            </div>
+            <p class="muted small" id="testerAuthHint"></p>
+            <div class="rate-live-values small" id="testerRateLive">Rate limit: click Execute or Check rate limit</div>
+          </div>
+          <div class="card">
+            <h3 class="tester-response-title">Response</h3>
+            <div id="testerSummary" class="response-summary muted">Select an API and click Execute.</div>
+            <div class="response-meta" id="testerMeta"></div>
+            <div class="response-box"><pre id="testerOut">{}</pre></div>
+          </div>
+        </div>
+      </div>
 
-function renderPrereqHtml(prereq) {
-  if (!prereq) return "";
-  const links = (prereq.links || (prereq.opId ? [{ opId: prereq.opId, label: prereq.label }] : []))
-    .map((link) => `<a href="#/execute?op=${encodeURIComponent(link.opId)}">${esc(link.label)}</a>`)
-    .join(" · ");
-  return `${esc(prereq.text)}${links ? ` ${links}` : ""}`;
+      <div id="workflowModeMount" class="${mode === "workflow" ? "" : "hidden"}">
+        ${mode === "workflow" ? renderWorkflowPanel(defaultWorkflow, { ...loadWorkflowContext() }, {}, defaultWorkflow.steps[0].id) : ""}
+      </div>
+    </div>`;
 }
 
-function getFieldHint(path, fieldName) {
-  if (!fieldHints) return "";
-  return fieldHints[`${path}.${fieldName}`] || fieldHints[`${path}.${fieldName.split(".").pop()}`] || "";
-}
-
-async function loadPortalAssets() {
-  fieldContracts = await loadFieldContracts();
-  try {
-    const [hintsRes, scenariosRes] = await Promise.all([
-      fetch("/assets/field-hints.json"),
-      fetch("/assets/scenarios.json"),
-    ]);
-    fieldHints = await hintsRes.json();
-    scenarios = await scenariosRes.json();
-  } catch {
-    fieldHints = fieldHints || {};
-    scenarios = scenarios || {};
+function renderSingleApiDepWarning(item) {
+  const opId = item.op?.operationId;
+  if (opId === "assignCourier") {
+    return `<div class="note warn small">
+      <strong>Assign Courier requires:</strong> <code>order_id</code> from Push Order and <code>courier_id</code> from Rate Calculator.
+      <p><a href="#/execute?mode=workflow">Open Workflow</a> · <a href="#/execute?op=post-push-order">Push Order</a> · <a href="#/execute?op=post-rate-calculator">Rate Calculator</a></p>
+    </div>`;
   }
+  if (opId === "getOrderLabel") {
+    return `<div class="note warn small">
+      <strong>Generate Label requires AWB.</strong> Enter an existing AWB or run the workflow to generate one.
+      <p><a href="#/execute?mode=workflow">Open Workflow</a></p>
+    </div>`;
+  }
+  if (opId === "trackOrder") {
+    return `<div class="note warn small">
+      <strong>Track Order requires AWB.</strong> Enter an existing AWB or run Assign Courier first.
+      <p><a href="#/execute?mode=workflow">Open Workflow</a></p>
+    </div>`;
+  }
+  return "";
 }
 
 function workflowApiDeps() {
@@ -1183,154 +1098,37 @@ function workflowApiDeps() {
   };
 }
 
-function getJourney() {
-  try {
-    return JSON.parse(sessionStorage.getItem(JOURNEY_STORAGE) || "{}") || {};
-  } catch {
-    return {};
-  }
-}
-
-function setJourney(patch) {
-  const next = { ...getJourney(), ...patch };
-  try {
-    sessionStorage.setItem(JOURNEY_STORAGE, JSON.stringify(next));
-  } catch {
-    /* ignore */
-  }
-  return next;
-}
-
-function syncJourneyFromAuth() {
-  const c = getActiveCredentials();
-  if (c.publicKey && c.privateKey) setJourney({ connected: true });
-}
-
-function updateJourneyFromCall(item, payload) {
-  if (!item) return;
-  setJourney({ tested: true });
-  const ok = payload && (payload.result === "1" || payload.result === 1);
-  if (!ok) return;
-  if (["/get-warehouses", "/create-warehouse"].includes(item.path)) setJourney({ warehouseReady: true });
-  if (item.path === "/push-order" || item.path === "/push-return-order") setJourney({ pushed: true });
-  if (["/rate-calculator", "/international-rate-calculator"].includes(item.path)) setJourney({ rated: true });
-  if (["/assign-courier", "/auto-assign-order"].includes(item.path)) setJourney({ courierAssigned: true });
-  if (["/get-order-label/{awb_number}", "/generate-manifest"].includes(item.path)) setJourney({ labeled: true });
-  if (["/track-order", "/cancel-order"].includes(item.path)) setJourney({ completed: true });
-}
-
-function renderJourneyStrip() {
-  syncJourneyFromAuth();
-  const j = getJourney();
-  const steps = [
-    { id: "connected", label: "Connect", done: !!j.connected },
-    { id: "tested", label: "Test a call", done: !!j.tested },
-    { id: "warehouseReady", label: "Create / Get warehouse", done: !!j.warehouseReady },
-    { id: "pushed", label: "Push order", done: !!j.pushed },
-    { id: "rated", label: "Rate calculator", done: !!j.rated },
-    { id: "courierAssigned", label: "Assign courier", done: !!j.courierAssigned },
-    { id: "labeled", label: "Label", done: !!j.labeled },
-    { id: "completed", label: "Track or cancel", done: !!j.completed },
-  ];
-  let foundCurrent = false;
-  const parts = [];
-  steps.forEach((s, i) => {
-    let cls = "journey-step";
-    if (s.done) cls += " done";
-    else if (!foundCurrent) {
-      cls += " current";
-      foundCurrent = true;
-    }
-    if (i > 0) parts.push(`<span class="journey-sep" aria-hidden="true">→</span>`);
-    parts.push(
-      `<span class="${cls}"><span class="journey-num">${s.done ? "✓" : i + 1}</span>${esc(s.label)}</span>`
-    );
-  });
-  return `<nav class="journey-strip" aria-label="Integration progress">${parts.join("")}</nav>`;
-}
-
-function renderTesterOpOptions(preselectId) {
-  return getWorkflowGroups()
-    .map((category) => {
-      const opts = category.items
-      .map(
-        (o) =>
-          `<option value="${o.id}" ${o.id === preselectId ? "selected" : ""}>${o.method} ${o.path} — ${esc(o.summary)}</option>`
-      )
-      .join("");
-      return `<optgroup label="${esc(category.label)}">${opts}</optgroup>`;
-    })
-    .join("");
-}
-
-function renderTester(preselectId) {
-  const opts = renderTesterOpOptions(preselectId);
-
-  return `
-    <div class="tester-layout">
-      <h1 class="page-title">API Tester</h1>
-      <p class="page-lead">Live requests go through this portal's proxy to <code>${getApiBase()}</code> (<strong>${esc(getBackendLabel())}</strong>). Connect API keys in the header — they are sent as <code>public-key</code> and <code>private-key</code> on every call.</p>
-      ${renderJourneyStrip()}
-
-      <div class="tester-grid">
-        <div class="card tester-form" id="testerForm">
-          <label for="testerOp">API endpoint</label>
-          <select id="testerOp" aria-label="API endpoint">${opts}</select>
-          <div id="testerPrereq" class="tester-prereq hidden"></div>
-          <div id="testerParams"></div>
-          <label for="testerBody">Request body (JSON)</label>
-          <textarea id="testerBody" rows="12" placeholder="{}" aria-label="Request body (JSON)"></textarea>
-          <div id="testerEnumHints" class="tester-enum-hints hidden"></div>
-          <div class="tester-actions">
-            <button type="button" class="btn-primary" id="testerRun">Execute API</button>
-            <button type="button" class="btn-secondary" id="testerCurl">Copy cURL</button>
-            <button type="button" class="btn-secondary" id="testerRateBtn">Check rate limit</button>
-          </div>
-          <p class="muted small" id="testerAuthHint"></p>
-          <div class="rate-live-values small" id="testerRateLive">Rate limit: click Execute or Check rate limit</div>
-        </div>
-        <div class="card">
-          <h2 class="tester-response-title">Response</h2>
-          <div class="response-meta" id="testerMeta">Select an API and click Execute.</div>
-          <div class="response-box"><pre id="testerOut">{}</pre></div>
-        </div>
-      </div>
-    </div>`;
-}
-
 function bindTester(preselectId) {
+  const root = $("#testerRoot") || $("#main");
+  const mode = getSavedTesterMode();
+
+  $("#testerConnectBtn")?.addEventListener("click", openAuthDialog);
+  $("#testerClearKeysBtn")?.addEventListener("click", () => {
+    clearCredentials();
+    toast("API keys cleared", "info");
+  });
+
+  root.querySelectorAll('input[name="testerMode"]').forEach((radio) => {
+    radio.addEventListener("change", (e) => {
+      saveTesterMode(e.target.value);
+      const hash = location.hash.split("?")[0];
+      location.hash = e.target.value === "workflow" ? "#/execute?mode=workflow" : "#/execute";
+    });
+  });
+
+  if (mode === "workflow") {
+    bindWorkflowPanel(root, workflowApiDeps());
+    return;
+  }
+
   const opSelect = $("#testerOp");
   const paramsDiv = $("#testerParams");
   const bodyTa = $("#testerBody");
   const hint = $("#testerAuthHint");
-  const prereqEl = $("#testerPrereq");
-  const enumEl = $("#testerEnumHints");
+  const depWarn = $("#testerDepWarning");
 
   function currentOp() {
     return operations.find((o) => o.id === opSelect.value);
-  }
-
-  function updateEndpointHelpers() {
-    const item = currentOp();
-    if (!item) return;
-    const prereq = TESTER_PREREQS[item.path];
-    if (prereq && prereqEl) {
-      prereqEl.classList.remove("hidden");
-      prereqEl.innerHTML = `${esc(prereq.text)} <a href="#/execute?op=${encodeURIComponent(prereq.opId)}">Jump to ${esc(prereq.label)} →</a>`;
-    } else if (prereqEl) {
-      prereqEl.classList.add("hidden");
-      prereqEl.innerHTML = "";
-    }
-    const enums = TESTER_ENUM_HINTS[item.path];
-    if (enums?.length && enumEl) {
-      enumEl.classList.remove("hidden");
-      enumEl.innerHTML =
-        `<strong>Allowed values:</strong> ` +
-        enums.map((e) => `<code>${esc(e.field)}</code> → ${esc(e.values)}`).join(" · ");
-    } else if (enumEl) {
-      enumEl.classList.add("hidden");
-      enumEl.innerHTML = "";
-    }
   }
 
   function fillForm() {
@@ -1346,7 +1144,6 @@ function bindTester(preselectId) {
         inp.dataset.param = p.name;
         inp.dataset.in = p.in;
         inp.placeholder = p.schema?.example || p.name;
-        inp.setAttribute("aria-label", `${p.name} (${p.in})`);
         if (p.name === "awb_number") inp.value = "";
         if (p.name === "order_id") inp.value = "test123";
         paramsDiv.appendChild(lab);
@@ -1358,6 +1155,8 @@ function bindTester(preselectId) {
     bodyTa.classList.toggle("hidden", hideBody);
     const bodyLabel = bodyTa.previousElementSibling;
     if (bodyLabel?.tagName === "LABEL") bodyLabel.classList.toggle("hidden", hideBody);
+
+    if (depWarn) depWarn.innerHTML = renderSingleApiDepWarning(item);
 
     const authRequired = needsAuth(item.op);
     const creds = getActiveCredentials();
@@ -1371,19 +1170,11 @@ function bindTester(preselectId) {
       hint.className = "hint-ok";
       hint.textContent = "No API keys required for this endpoint.";
     }
-    updateEndpointHelpers();
   }
 
-  opSelect.addEventListener("change", () => {
-    fillForm();
-    const item = currentOp();
-    if (item) history.replaceState(null, "", `#/execute?op=${encodeURIComponent(item.id)}`);
-  });
+  opSelect.addEventListener("change", fillForm);
   fillForm();
-  if (preselectId) {
-    opSelect.value = preselectId;
-    fillForm();
-  }
+  if (preselectId) opSelect.value = preselectId;
 
   function buildPathAndQuery() {
     const item = currentOp();
@@ -1410,12 +1201,16 @@ function bindTester(preselectId) {
       }
     }
     if (needsAuth(item.op) && !headers["public-key"]) {
-      $("#testerMeta").textContent = "Missing credentials";
-      $("#testerOut").textContent = 'Click "Connect API" in the header, paste keys, and Save.';
+      $("#testerMeta").textContent = "";
+      $("#testerSummary").className = "response-summary error";
+      $("#testerSummary").innerHTML =
+        "<strong>Missing keys</strong><p>API keys are missing. Open Connect API and save your public/private keys before testing this endpoint.</p>";
+      $("#testerOut").textContent = 'Click "Connect API" and Save keys.';
       $("#testerOut").parentElement?.classList.add("error");
       return;
     }
     $("#testerMeta").textContent = "Loading…";
+    $("#testerSummary").textContent = "";
     $("#testerOut").parentElement?.classList.remove("error");
     const runBtn = $("#testerRun");
     runBtn.disabled = true;
@@ -1435,15 +1230,24 @@ function bindTester(preselectId) {
         }
       }
       $("#testerMeta").textContent = meta;
+      const summaryEl = $("#testerSummary");
       if (wrapped.error === "UPSTREAM_HTML") {
         $("#testerOut").parentElement?.classList.add("error");
         $("#testerOut").textContent = wrapped.message;
+        if (summaryEl) {
+          summaryEl.className = "response-summary error";
+          summaryEl.innerHTML = `<strong>Proxy issue</strong><p>The server returned HTML instead of an API response. Check that the proxy route is available.</p>`;
+        }
       } else {
         const payload = wrapped.data;
-        updateJourneyFromCall(item, payload);
-        const strip = document.querySelector(".journey-strip");
-        if (strip) strip.outerHTML = renderJourneyStrip();
         const interpretation = interpretShipmozoResponse(payload);
+        if (summaryEl && interpretation) {
+          summaryEl.className = `response-summary ${interpretation.type}`;
+          summaryEl.innerHTML = `<strong>${esc(interpretation.title)}</strong><p>${esc(interpretation.text)}</p>`;
+        } else if (summaryEl) {
+          summaryEl.className = "response-summary muted";
+          summaryEl.textContent = payload?.result === "1" ? "Success" : "See response below";
+        }
         const pre = $("#testerOut");
         const bannerId = "testerResultBanner";
         let banner = document.getElementById(bannerId);
@@ -1451,7 +1255,6 @@ function bindTester(preselectId) {
           if (!banner && pre?.parentElement) {
             banner = document.createElement("div");
             banner.id = bannerId;
-            banner.setAttribute("role", "status");
             pre.parentElement.insertBefore(banner, pre);
           }
           if (banner) {
@@ -1508,547 +1311,6 @@ function bindTester(preselectId) {
   });
 }
 
-function resolveTesterOperationId(requestedId) {
-  if (requestedId && operations.some((operation) => operation.id === requestedId)) return requestedId;
-  if (operations.some((operation) => operation.id === DEFAULT_TESTER_OPERATION_ID)) return DEFAULT_TESTER_OPERATION_ID;
-  return operations[0]?.id || "";
-}
-
-function getRequestBodySchema(op) {
-  const schema = op.requestBody?.content?.["application/json"]?.schema;
-  return schema?.$ref ? resolveRef(schema.$ref) : schema;
-}
-
-function getEnumFieldsForOperation(item) {
-  const properties = getRequestBodySchema(item.op)?.properties || {};
-  return Object.keys(TESTER_ENUM_OPTIONS).filter((field) => Object.hasOwn(properties, field));
-}
-
-function getTesterExampleText(item) {
-  const example = getRequestExample(item.op);
-  return example ? JSON.stringify(example, null, 2) : "";
-}
-
-async function copyText(text, label) {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast(`${label} copied`, "ok");
-  } catch {
-    const fallback = document.createElement("textarea");
-    fallback.value = text;
-    fallback.setAttribute("readonly", "");
-    fallback.style.position = "fixed";
-    fallback.style.opacity = "0";
-    document.body.appendChild(fallback);
-    fallback.select();
-    document.execCommand("copy");
-    fallback.remove();
-    toast(`${label} copied`, "ok");
-  }
-}
-
-function renderPhase1Tester(preselectId) {
-  const selectedId = resolveTesterOperationId(preselectId);
-  const opts = renderTesterOpOptions(selectedId);
-  const mode = getSavedTesterMode();
-  const lifecycle = mode === "lifecycle";
-
-  return `
-    <div class="tester-layout" id="testerRoot">
-      <h1 class="page-title">API Tester</h1>
-      <p class="page-lead">Requests go through this portal's proxy to <code>${getApiBase()}</code> (<strong>${esc(getBackendLabel())}</strong>). The response body below is the exact Shipmozo API body.</p>
-      ${renderModeToggle(mode)}
-      <div class="tester-safety-note"><strong>Dev requests run against a live sandbox:</strong> pushing an order creates a real order and AWB on your account. Cancel test orders when you're done. Dev and Live use separate keys.</div>
-      ${renderJourneyStrip()}
-
-      <div id="singleModePanel" class="${lifecycle ? "hidden" : ""}">
-      <div class="tester-grid">
-        <div class="card tester-form" id="testerForm">
-          <label for="testerScenario">Load scenario</label>
-          <select id="testerScenario" aria-label="Load scenario"><option value="">— Choose a scenario —</option></select>
-          <p class="scenario-expected hidden" id="testerScenarioExpected"></p>
-          <label for="testerOp">API endpoint</label>
-          <select id="testerOp" aria-label="API endpoint">${opts}</select>
-          <div id="testerPrereq" class="tester-prereq hidden"></div>
-          <div id="testerUnitFacts" class="tester-unit-facts hidden"></div>
-          <div id="testerFieldContract"></div>
-          <div id="testerParams"></div>
-          <label for="testerBody">Request body (JSON)</label>
-          <div id="testerBodyHints" class="tester-body-hints hidden"></div>
-          <textarea id="testerBody" rows="12" placeholder="{}" aria-label="Request body (JSON)"></textarea>
-          <div id="testerEnumControls" class="tester-enum-controls hidden"></div>
-          <div class="tester-actions">
-            <button type="button" class="btn-primary" id="testerRun">Execute API</button>
-            <button type="button" class="btn-secondary" id="testerCurl">Copy cURL</button>
-            <button type="button" class="btn-secondary" id="testerCopyRequest">Copy request</button>
-            <button type="button" class="btn-secondary" id="testerReset">Reset example</button>
-            <button type="button" class="btn-secondary" id="testerRateBtn">Check rate limit</button>
-          </div>
-          <p class="muted small" id="testerAuthHint"></p>
-          <div class="rate-live-values small" id="testerRateLive">Rate limit: click Execute or Check rate limit</div>
-        </div>
-        <div class="card tester-response-card">
-          <div class="tester-response-head">
-            <h2 class="tester-response-title">Response</h2>
-            <button type="button" class="btn-secondary btn-sm" id="testerCopyResponse">Copy response</button>
-          </div>
-          <div class="response-meta" id="testerMeta">Select an API and click Execute.</div>
-          <div class="result-banner hidden" id="testerResultBanner" role="status"></div>
-          <div class="response-tabs" role="tablist" aria-label="Response views">
-            <button type="button" class="response-tab active" role="tab" aria-selected="true" data-response-tab="body">Response Body</button>
-            <button type="button" class="response-tab hidden" role="tab" aria-selected="false" data-response-tab="label" id="testerLabelTab">Label</button>
-            <button type="button" class="response-tab" role="tab" aria-selected="false" data-response-tab="headers">Response Headers</button>
-            <button type="button" class="response-tab" role="tab" aria-selected="false" data-response-tab="debug">Debug</button>
-          </div>
-          <div class="response-panel" data-response-panel="body">
-            <div class="response-box"><pre id="testerOut">{}</pre></div>
-          </div>
-          <div class="response-panel hidden" data-response-panel="label">
-            <div class="label-preview hidden" id="testerLabelPreview"></div>
-          </div>
-          <div class="response-panel hidden" data-response-panel="headers">
-            <div class="response-box"><pre id="testerHeadersOut">{}</pre></div>
-          </div>
-          <div class="response-panel hidden" data-response-panel="debug">
-            <div class="response-box"><pre id="testerDebugOut">{}</pre></div>
-          </div>
-        </div>
-      </div>
-      </div>
-
-      <div id="workflowModeMount" class="${lifecycle ? "" : "hidden"}">
-        ${lifecycle ? renderWorkflowPanel(lifecycleWorkflow, { ...loadWorkflowContext() }, {}, lifecycleWorkflow.steps[0].id) : ""}
-      </div>
-    </div>`;
-}
-
-function bindPhase1Tester(preselectId) {
-  const root = $("#testerRoot") || $("#main");
-  const mode = getSavedTesterMode();
-
-  root.querySelectorAll('input[name="testerMode"]').forEach((radio) => {
-    radio.addEventListener("change", (e) => {
-      saveTesterMode(e.target.value);
-      const params = new URLSearchParams(location.hash.split("?")[1] || "");
-      if (e.target.value === "lifecycle") {
-        params.set("mode", "lifecycle");
-        location.hash = `#/execute?${params.toString()}`;
-      } else {
-        params.delete("mode");
-        const qs = params.toString();
-        location.hash = qs ? `#/execute?${qs}` : "#/execute";
-      }
-    });
-  });
-
-  if (mode === "lifecycle") {
-    bindWorkflowPanel(root, workflowApiDeps());
-    return;
-  }
-
-  const opSelect = $("#testerOp");
-  const scenarioSelect = $("#testerScenario");
-  const scenarioExpected = $("#testerScenarioExpected");
-  const fieldContractEl = $("#testerFieldContract");
-  const bodyHintsEl = $("#testerBodyHints");
-  const paramsDiv = $("#testerParams");
-  const bodyTa = $("#testerBody");
-  const hint = $("#testerAuthHint");
-  const prereqEl = $("#testerPrereq");
-  const unitFactsEl = $("#testerUnitFacts");
-  const enumControlsEl = $("#testerEnumControls");
-  const bodyLabel = document.querySelector('label[for="testerBody"]');
-  let latestResponseBody = {};
-
-  function currentOp() {
-    return operations.find((operation) => operation.id === opSelect.value);
-  }
-
-  function getBodyObject() {
-    const raw = bodyTa.value.trim();
-    if (!raw) return {};
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
-  }
-
-  function getQueryObject() {
-    return Object.fromEntries(
-      [...paramsDiv.querySelectorAll('input[data-in="query"]')]
-        .filter((input) => input.value)
-        .map((input) => [input.dataset.param, input.value])
-    );
-  }
-
-  function setResponseTab(tabName) {
-    document.querySelectorAll("[data-response-tab]").forEach((tab) => {
-      const active = tab.dataset.responseTab === tabName;
-      tab.classList.toggle("active", active);
-      tab.setAttribute("aria-selected", String(active));
-    });
-    document.querySelectorAll("[data-response-panel]").forEach((panel) => {
-      panel.classList.toggle("hidden", panel.dataset.responsePanel !== tabName);
-    });
-  }
-
-  function updateResultBanner(payload) {
-    const banner = $("#testerResultBanner");
-    const interpretation = interpretShipmozoResponse(payload);
-    if (!banner || !interpretation) {
-      banner?.classList.add("hidden");
-      return;
-    }
-    banner.className = `result-banner ${interpretation.type}`;
-    banner.innerHTML = `<strong>${esc(interpretation.title)}</strong><p>${esc(interpretation.text)}</p>`;
-  }
-
-  function renderLabelPreview(payload) {
-    const host = $("#testerLabelPreview");
-    const labelTab = $("#testerLabelTab");
-    if (!host) return;
-    const entries = Array.isArray(payload?.data) ? payload.data : [payload?.data];
-    const rawLabel = entries.find((entry) => typeof entry?.label === "string")?.label;
-    if (!rawLabel) {
-      host.classList.add("hidden");
-      host.innerHTML = "";
-      labelTab?.classList.add("hidden");
-      if (labelTab?.classList.contains("active") || labelTab?.getAttribute("aria-selected") === "true") {
-        setResponseTab("body");
-      }
-      return;
-    }
-    const source = rawLabel.startsWith("data:")
-      ? rawLabel
-      : `data:image/png;base64,${rawLabel.replace(/\s/g, "")}`;
-    host.classList.remove("hidden");
-    host.innerHTML = "";
-    const heading = document.createElement("h3");
-    heading.textContent = "Shipping label preview";
-    const frame = document.createElement("div");
-    frame.className = "label-preview-frame";
-    const image = document.createElement("img");
-    image.src = source;
-    image.alt = "Shipping label returned by Shipmozo";
-    frame.append(image);
-    const download = document.createElement("a");
-    download.href = source;
-    download.download = "shipmozo-label.png";
-    download.className = "btn-secondary btn-sm";
-    download.textContent = "Download label";
-    host.append(heading, frame, download);
-    labelTab?.classList.remove("hidden");
-    setResponseTab("label");
-  }
-
-  function renderResponse(payload, wrapped, durationMs) {
-    latestResponseBody = payload ?? {};
-    $("#testerOut").textContent = JSON.stringify(latestResponseBody, null, 2);
-    $("#testerHeadersOut").textContent = JSON.stringify(wrapped.rateLimitHeaders || {}, null, 2);
-    $("#testerDebugOut").textContent = JSON.stringify(
-      {
-        httpStatus: wrapped.status ?? 200,
-        requestDurationMs: Math.round(durationMs),
-        rateLimit: wrapped.rateLimit || {},
-      },
-      null,
-      2
-    );
-    updateResultBanner(payload);
-    renderLabelPreview(payload);
-    const hasLabel = Array.isArray(payload?.data)
-      ? payload.data.some((entry) => typeof entry?.label === "string")
-      : typeof payload?.data?.label === "string";
-    if (!hasLabel) setResponseTab("body");
-  }
-
-  function syncEnumControlsFromBody() {
-    const body = getBodyObject();
-    if (!body) return;
-    enumControlsEl.querySelectorAll("select[data-enum-field]").forEach((select) => {
-      const value = body[select.dataset.enumField];
-      if (value && [...select.options].some((option) => option.value === String(value))) {
-        select.value = String(value);
-      }
-    });
-  }
-
-  function renderEnumControls(item) {
-    const fields = getEnumFieldsForOperation(item);
-    if (!fields.length) {
-      enumControlsEl.classList.add("hidden");
-      enumControlsEl.innerHTML = "";
-      return;
-    }
-    const body = getBodyObject() || {};
-    enumControlsEl.classList.remove("hidden");
-    enumControlsEl.innerHTML = `
-      <p class="tester-enum-title">Guided values <span>Selections update the JSON request body.</span></p>
-      <div class="tester-enum-grid">
-        ${fields
-          .map(
-            (field) => `<label for="enum-${field}">${esc(field.replaceAll("_", " "))}</label>
-              <select id="enum-${field}" data-enum-field="${field}" aria-label="${esc(field)}">
-                ${TESTER_ENUM_OPTIONS[field]
-                  .map((value) => `<option value="${esc(value)}" ${body[field] === value ? "selected" : ""}>${esc(value)}</option>`)
-                  .join("")}
-              </select>`
-          )
-          .join("")}
-      </div>`;
-    enumControlsEl.querySelectorAll("select[data-enum-field]").forEach((select) => {
-      select.addEventListener("change", () => {
-        const updatedBody = getBodyObject();
-        if (!updatedBody) {
-          toast("Fix the JSON request body before using guided values.", "error");
-          syncEnumControlsFromBody();
-          return;
-        }
-        updatedBody[select.dataset.enumField] = select.value;
-        bodyTa.value = JSON.stringify(updatedBody, null, 2);
-      });
-    });
-  }
-
-  function updateEndpointHelpers(item) {
-    const prereq = TESTER_PREREQS[item.path];
-    if (prereq) {
-      prereqEl.classList.remove("hidden");
-      prereqEl.innerHTML = renderPrereqHtml(prereq);
-    } else {
-      prereqEl.classList.add("hidden");
-      prereqEl.innerHTML = "";
-    }
-    const facts = TESTER_UNIT_FACTS[item.path];
-    unitFactsEl.classList.toggle("hidden", !facts);
-    unitFactsEl.textContent = facts || "";
-    if (fieldContractEl) {
-      fieldContractEl.innerHTML = renderFieldContractCollapsible(item.op.operationId, fieldContracts);
-    }
-    if (bodyHintsEl && fieldHints) {
-      const hints = Object.entries(fieldHints)
-        .filter(([key]) => key.startsWith(`${item.path}.`))
-        .map(([key, text]) => {
-          const field = key.slice(item.path.length + 1);
-          return `<span class="field-hint-item"><code>${esc(field)}</code> — ${esc(text)}</span>`;
-        });
-      if (hints.length) {
-        bodyHintsEl.classList.remove("hidden");
-        bodyHintsEl.innerHTML = hints.join(" · ");
-      } else {
-        bodyHintsEl.classList.add("hidden");
-        bodyHintsEl.innerHTML = "";
-      }
-    }
-    renderEnumControls(item);
-    populateScenarioSelect(item);
-  }
-
-  function populateScenarioSelect(item) {
-    if (!scenarioSelect) return;
-    const list = scenarios?.[item.id];
-    scenarioSelect.innerHTML = '<option value="">— Choose a scenario —</option>';
-    if (!list || !list.length) {
-      if (item.path.includes("international")) {
-        scenarioSelect.innerHTML += '<option value="" disabled>Coming soon — insufficient verified field data</option>';
-      }
-      scenarioExpected?.classList.add("hidden");
-      return;
-    }
-    list.forEach((scenario, index) => {
-      const opt = document.createElement("option");
-      opt.value = String(index);
-      opt.textContent = scenario.label;
-      scenarioSelect.appendChild(opt);
-    });
-    scenarioExpected?.classList.add("hidden");
-  }
-
-  function applyScenario(index) {
-    const item = currentOp();
-    const list = scenarios?.[item?.id];
-    const scenario = list?.[Number(index)];
-    if (!scenario) {
-      scenarioExpected?.classList.add("hidden");
-      return;
-    }
-    if (scenario.body) bodyTa.value = JSON.stringify(scenario.body, null, 2);
-    if (scenario.params) {
-      Object.entries(scenario.params).forEach(([name, value]) => {
-        const input = paramsDiv.querySelector(`input[data-param="${name}"]`);
-        if (input) input.value = value;
-      });
-    }
-    syncEnumControlsFromBody();
-    if (scenarioExpected) {
-      scenarioExpected.classList.remove("hidden");
-      scenarioExpected.textContent = `Expected: ${scenario.expected || "See API response"}`;
-    }
-  }
-
-  function appendFieldHint(labelEl, path, fieldName) {
-    const hintText = getFieldHint(path, fieldName);
-    if (!hintText) return;
-    const span = document.createElement("span");
-    span.className = "field-hint";
-    span.textContent = hintText;
-    labelEl.appendChild(span);
-  }
-
-  function fillForm() {
-    const item = currentOp();
-    if (!item) return;
-    paramsDiv.innerHTML = "";
-    collectParams(item.op, item.path)
-      .filter((parameter) => parameter.in === "path" || parameter.in === "query")
-      .forEach((parameter) => {
-        const label = document.createElement("label");
-        label.textContent = `${parameter.name} (${parameter.in})${parameter.required ? " *" : ""}`;
-        appendFieldHint(label, item.path, parameter.name);
-        const input = document.createElement("input");
-        input.dataset.param = parameter.name;
-        input.dataset.in = parameter.in;
-        input.placeholder = parameter.schema?.example || parameter.name;
-        input.setAttribute("aria-label", `${parameter.name} (${parameter.in})`);
-        paramsDiv.append(label, input);
-      });
-
-    bodyTa.value = getTesterExampleText(item);
-    const hideBody = item.method === "GET";
-    bodyTa.classList.toggle("hidden", hideBody);
-    bodyLabel?.classList.toggle("hidden", hideBody);
-
-    const authRequired = needsAuth(item.op);
-    const credentials = getActiveCredentials();
-    if (authRequired && !credentials.publicKey) {
-      hint.className = "hint-warn";
-      hint.textContent = "Connect API keys (header button) or paste keys and click Save.";
-    } else if (authRequired) {
-      hint.className = "hint-ok";
-      hint.textContent = "API keys will be sent as public-key and private-key headers.";
-    } else {
-      hint.className = "hint-ok";
-      hint.textContent = "No API keys required for this endpoint.";
-    }
-    updateEndpointHelpers(item);
-  }
-
-  function buildPathAndQuery() {
-    const item = currentOp();
-    let path = item.path;
-    const query = [];
-    paramsDiv.querySelectorAll("input[data-param]").forEach((input) => {
-      if (input.dataset.in === "path" && input.value) path = path.replace(`{${input.dataset.param}}`, encodeURIComponent(input.value));
-      if (input.dataset.in === "query" && input.value) query.push(`${input.dataset.param}=${encodeURIComponent(input.value)}`);
-    });
-    if (query.length) path += `?${query.join("&")}`;
-    return { item, path };
-  }
-
-  document.querySelectorAll("[data-response-tab]").forEach((tab) => {
-    tab.addEventListener("click", () => setResponseTab(tab.dataset.responseTab));
-  });
-  bodyTa.addEventListener("input", syncEnumControlsFromBody);
-  opSelect.value = resolveTesterOperationId(preselectId);
-  fillForm();
-
-  opSelect.addEventListener("change", () => {
-    fillForm();
-    const item = currentOp();
-    if (item) history.replaceState(null, "", `#/execute?op=${encodeURIComponent(item.id)}`);
-  });
-
-  scenarioSelect?.addEventListener("change", () => applyScenario(scenarioSelect.value));
-
-  $("#testerRun").addEventListener("click", async () => {
-    const { item, path } = buildPathAndQuery();
-    const headers = { ...authHeaders() };
-    let body;
-    if (item.method !== "GET") {
-      body = getBodyObject();
-      if (!body) {
-        $("#testerMeta").textContent = "Invalid JSON in request body";
-        return;
-      }
-    }
-    if (needsAuth(item.op) && !headers["public-key"]) {
-      $("#testerMeta").textContent = "Missing credentials";
-      renderResponse(
-        { result: "0", message: "Missing credentials", data: { error: 'Click "Connect API" in the header, paste keys, and Save.' } },
-        {},
-        0
-      );
-      return;
-    }
-
-    $("#testerMeta").textContent = "Loading…";
-    const runBtn = $("#testerRun");
-    runBtn.disabled = true;
-    const startedAt = performance.now();
-    try {
-      const wrapped = await proxyRequest({ method: item.method, path, headers, body });
-      const durationMs = performance.now() - startedAt;
-      $("#testerMeta").textContent = `${item.method} ${path} · ${Math.round(durationMs)} ms`;
-      renderResponse(wrapped.data, wrapped, durationMs);
-      updateJourneyFromCall(item, wrapped.data);
-      const strip = document.querySelector(".journey-strip");
-      if (strip) strip.outerHTML = renderJourneyStrip();
-      if (wrapped.rateLimit?.limit) {
-        $("#testerRateLive").innerHTML = `Live headers: <strong>${esc(String(wrapped.rateLimit.remaining))}</strong> / ${esc(String(wrapped.rateLimit.limit))} remaining (this request)`;
-      }
-    } catch (error) {
-      const durationMs = performance.now() - startedAt;
-      $("#testerMeta").textContent = `Request failed · ${Math.round(durationMs)} ms`;
-      renderResponse({ result: "0", message: error.message, data: { error: error.message } }, {}, durationMs);
-    } finally {
-      runBtn.disabled = false;
-    }
-  });
-
-  $("#testerCopyRequest").addEventListener("click", () => {
-    const item = currentOp();
-    const value = item.method === "GET" ? JSON.stringify(getQueryObject(), null, 2) : bodyTa.value || "{}";
-    copyText(value, "Request");
-  });
-
-  $("#testerCopyResponse").addEventListener("click", () => {
-    copyText(JSON.stringify(latestResponseBody, null, 2), "Response");
-  });
-
-  $("#testerReset").addEventListener("click", () => {
-    bodyTa.value = getTesterExampleText(currentOp());
-    syncEnumControlsFromBody();
-    toast("Example restored", "ok");
-  });
-
-  $("#testerCurl").addEventListener("click", () => {
-    const { item, path } = buildPathAndQuery();
-    const body = item.method === "GET" ? undefined : getBodyObject();
-    if (item.method !== "GET" && !body) {
-      toast("Fix the JSON request body before copying cURL.", "error");
-      return;
-    }
-    copyText(buildCurl(item.method, getApiBase() + path, authHeaders(), body), "cURL");
-  });
-
-  $("#testerRateBtn")?.addEventListener("click", async () => {
-    const rateLimitOutput = $("#testerRateLive");
-    rateLimitOutput.textContent = "Checking…";
-    try {
-      const live = await fetchLiveRateLimit();
-      const rateLimit = live.rateLimit;
-      if (rateLimit?.limit) {
-        rateLimitOutput.innerHTML = `Live headers: <strong>${esc(String(rateLimit.remaining))}</strong> / ${esc(String(rateLimit.limit))} via <code>${esc(live.via)}</code> @ ${esc(rateLimit.observedAt || "")}`;
-      } else {
-        rateLimitOutput.textContent = "No rate-limit headers returned.";
-      }
-    } catch (error) {
-      rateLimitOutput.textContent = error.message;
-    }
-  });
-}
-
 function buildSidebar(filter = "") {
   const nav = $("#sidebarNav");
   const q = filter.toLowerCase();
@@ -2059,13 +1321,19 @@ function buildSidebar(filter = "") {
         { href: "#/", label: "Overview" },
         { href: "#/auth", label: "Authentication" },
         { href: "#/workflows", label: "Integration flows" },
+        { href: "#/rate-limits", label: "Rate limits" },
         { href: "#/errors", label: "Error codes" },
         { href: "#/best-practices", label: "Best practices" },
       ],
     },
   ];
 
-  const workflowGroups = getWorkflowGroups(operations.filter((operation) => matchesWorkflowSearch(operation, q)));
+  const byTag = {};
+  operations.forEach((o) => {
+    if (q && !`${o.method} ${o.path} ${o.summary}`.toLowerCase().includes(q)) return;
+    if (!byTag[o.tag]) byTag[o.tag] = [];
+    byTag[o.tag].push(o);
+  });
 
   let html = "";
   staticGroups.forEach((g) => {
@@ -2078,9 +1346,12 @@ function buildSidebar(filter = "") {
 
   html += `<div class="nav-group"><div class="nav-group-title">Tools</div><a class="nav-link" href="#/execute">API Tester</a></div>`;
 
-  workflowGroups.forEach((category) => {
-    html += `<div class="nav-group"><div class="nav-group-title">${esc(category.label)}</div>`;
-    category.items.forEach((o) => {
+  const tagOrder = ["Common", "Orders", "Utility", "Warehouse", "Track", "Label"];
+  const tags = [...new Set([...tagOrder, ...Object.keys(byTag)])];
+  tags.forEach((tag) => {
+    if (!byTag[tag]?.length) return;
+    html += `<div class="nav-group"><div class="nav-group-title">${esc(tag)}</div>`;
+    byTag[tag].forEach((o) => {
       html += `<a class="nav-link" href="#/api/${o.id}"><span class="method method-${o.method}">${o.method}</span>${esc(o.summary)}</a>`;
     });
     html += `</div>`;
@@ -2091,24 +1362,18 @@ function buildSidebar(filter = "") {
 
 function setActiveNav() {
   const hash = location.hash || "#/";
-  const h = hash.split("?")[0];
-  const query = hash.includes("?") ? hash.split("?")[1] : "";
-  const params = new URLSearchParams(query);
-  const isLifecycle = h === "#/execute" && params.get("mode") === "lifecycle";
-  const isExecute = h === "#/execute" && !isLifecycle;
   document.querySelectorAll(".nav-link").forEach((a) => {
-    a.classList.toggle("active", a.getAttribute("href") === h);
+    a.classList.toggle("active", a.getAttribute("href") === hash.split("?")[0]);
   });
   document.querySelectorAll(".topnav-link").forEach((a) => {
     const nav = a.dataset.nav;
+    const h = hash.split("?")[0];
     a.classList.toggle(
       "active",
-      (nav === "execute" && isExecute) ||
-        (nav === "lifecycle" && isLifecycle) ||
-        (nav === "demo" && h === "#/demo") ||
+      (nav === "execute" && h.startsWith("#/execute")) ||
         (nav === "workflows" && h === "#/workflows") ||
-        (nav === "errors" && h === "#/errors") ||
-        (nav === "docs" && !["#/execute", "#/workflows", "#/errors", "#/demo"].includes(h))
+        (nav === "errors" && (h === "#/errors" || h === "#/rate-limits")) ||
+        (nav === "docs" && !["#/execute", "#/workflows", "#/errors", "#/rate-limits"].some((x) => h.startsWith(x)))
     );
   });
 }
@@ -2116,29 +1381,15 @@ function setActiveNav() {
 async function route() {
   const main = $("#main");
   const hash = location.hash || "#/";
-  const searchInput = $("#searchInput");
-  if (searchInput?.value) {
-    searchInput.value = "";
-    buildSidebar();
-  }
   setActiveNav();
 
   if (hash.startsWith("#/execute")) {
-    const query = hash.split("?")[1] || "";
-    const params = new URLSearchParams(query);
+    const params = new URLSearchParams(hash.split("?")[1] || "");
     const op = params.get("op");
-    if (params.get("mode") === "lifecycle") {
-      saveTesterMode("lifecycle");
-    } else if (params.has("op")) {
-      saveTesterMode("single");
-    }
-    main.innerHTML = renderPhase1Tester(op);
-    bindPhase1Tester(op);
-    return;
-  }
-  if (hash.startsWith("#/demo")) {
-    main.innerHTML = renderDemoPage();
-    bindDemoPage();
+    if (params.get("mode") === "workflow") saveTesterMode("workflow");
+    else if (params.get("mode") === "single") saveTesterMode("single");
+    main.innerHTML = renderTester(op);
+    bindTester(op);
     return;
   }
   if (hash === "#/" || hash === "#") {
@@ -2157,7 +1408,8 @@ async function route() {
     return;
   }
   if (hash === "#/rate-limits") {
-    location.hash = "#/";
+    main.innerHTML = renderRateLimitsPage();
+    bindLiveRateLimit(main);
     return;
   }
   if (hash === "#/errors") {
@@ -2183,34 +1435,14 @@ async function route() {
   bindCodeTabs(main);
 }
 
-function setModalOpen(open) {
-  document.body.classList.toggle("modal-open", !!open);
-  if (open) document.body.style.overflow = "hidden";
-  else document.body.style.overflow = "";
-}
-
 function openAuthDialog() {
   const dlg = $("#authDialog");
-  if (!dlg) return;
-  setModalOpen(true);
-  if (dlg.showModal) dlg.showModal();
-  else dlg.setAttribute("open", "");
-}
-
-function closeAuthDialog() {
-  const dlg = $("#authDialog");
-  dlg?.close?.();
-  dlg?.removeAttribute("open");
-  setModalOpen(false);
+  if (dlg?.showModal) dlg.showModal();
 }
 
 function bindAuthDialog() {
   $("#openAuthBtn")?.addEventListener("click", openAuthDialog);
-  $("#closeAuthBtn")?.addEventListener("click", closeAuthDialog);
-
-  const dlg = $("#authDialog");
-  dlg?.addEventListener("close", () => setModalOpen(false));
-  dlg?.addEventListener("cancel", () => setModalOpen(false));
+  $("#closeAuthBtn")?.addEventListener("click", () => $("#authDialog")?.close());
 
   $("#authLoginBtn")?.addEventListener("click", async () => {
     const u = $("#authUsername").value.trim();
@@ -2226,11 +1458,10 @@ function bindAuthDialog() {
     msg.className = "auth-login-msg";
     try {
       await loginWithPassword(u, p);
-      setJourney({ connected: true });
       msg.className = "auth-login-msg ok";
       msg.textContent = "Keys saved. You can close this dialog.";
       toast("API keys connected", "ok");
-      closeAuthDialog();
+      $("#authDialog")?.close();
     } catch (e) {
       msg.className = "auth-login-msg error";
       msg.textContent = e.message;
@@ -2249,7 +1480,6 @@ function bindAuthDialog() {
     credentials.publicKey = c.publicKey;
     credentials.privateKey = c.privateKey;
     saveCredentials();
-    setJourney({ connected: true });
     msg.className = "auth-login-msg";
     msg.textContent = "Checking account with Shipmozo…";
     const accountState = await probeAccountStatus();
@@ -2263,12 +1493,12 @@ function bindAuthDialog() {
       msg.className = "auth-login-msg ok";
       msg.textContent = "Keys saved. Account is active.";
       toast("Keys saved — account ready", "ok");
-      closeAuthDialog();
+      $("#authDialog")?.close();
     } else {
       msg.className = "auth-login-msg ok";
       msg.textContent = "Keys saved locally.";
       toast("API keys saved", "ok");
-      closeAuthDialog();
+      $("#authDialog")?.close();
     }
   });
 
@@ -2278,6 +1508,11 @@ function bindAuthDialog() {
     $("#authPassword").value = "";
     $("#authLoginMsg").textContent = "";
     toast("Disconnected", "info");
+  });
+
+  $("#headerClearKeysBtn")?.addEventListener("click", () => {
+    clearCredentials();
+    toast("API keys cleared", "info");
   });
 }
 
@@ -2304,20 +1539,29 @@ function showProxyWarning() {
 async function init() {
   loadBackend();
   loadCredentials();
+  clearLegacyKeyStorage();
   syncBackendUI();
   bindAuthDialog();
   bindBackendSwitch();
-  refreshAuthStatusFromKeys();
+  try {
+    const { data } = await fetchJson("/health");
+    proxyHealthy = data?.proxy === true;
+    backendEnv = data?.defaultBackend === "live" ? "live" : backendEnv;
+    const hint = $("#authBackendHint");
+    if (hint) hint.textContent = getBackendLabel();
+  } catch {
+    proxyHealthy = false;
+  }
+  updateConnectionStatus();
+  syncAuthUI();
   try {
     await loadSpec();
-    await loadPortalAssets();
     $("#loading")?.remove();
     buildSidebar();
     $("#searchInput").addEventListener("input", (e) => buildSidebar(e.target.value));
     window.addEventListener("hashchange", route);
     route();
-    const proxyOk = await checkProxyAvailable();
-    if (!proxyOk) showProxyWarning();
+    if (!proxyHealthy) showProxyWarning();
   } catch (e) {
     $("#main").innerHTML = `<p class="error-text">Failed to load API spec: ${esc(e.message)}</p>
       <p class="muted" style="padding:0 24px">Run <code>npm run build:spec</code> then <code>npm start</code> from the logistics-api folder. Hard-refresh (Ctrl+Shift+R).</p>`;

@@ -3,7 +3,7 @@
 export const demoWorkflows = [
   {
     id: "domestic",
-    label: "A. Ship a Domestic Order",
+    label: "Ship a Domestic Order",
     verified: true,
     description: "Fully verified recorded responses from Dev sandbox.",
     handoff: { mode: "lifecycle", warehouse_id: "519", delivery_pincode: "122001" },
@@ -138,7 +138,7 @@ export const demoWorkflows = [
   },
   {
     id: "international",
-    label: "B. Ship an International Order",
+    label: "Ship an International Order",
     verified: false,
     description: "Illustrative responses — NOT independently verified live.",
     handoff: { mode: "single", op: "post-/international-push-order" },
@@ -236,7 +236,7 @@ export const demoWorkflows = [
   },
   {
     id: "return",
-    label: "C. Create a Reverse Shipment (Return)",
+    label: "Create a Reverse Shipment (Return)",
     verified: false,
     description: "Illustrative responses — NOT independently verified live.",
     handoff: { mode: "single", op: "post-/push-return-order" },

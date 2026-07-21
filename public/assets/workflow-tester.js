@@ -122,11 +122,14 @@ function renderResponseTabs(idPrefix) {
   return `
     <div class="response-tabs wf-response-tabs" role="tablist" aria-label="Response views">
       <button type="button" class="response-tab active" role="tab" data-wf-tab="${idPrefix}-body">Response Body</button>
+      <button type="button" class="response-tab hidden" role="tab" data-wf-tab="${idPrefix}-label" id="${idPrefix}LabelTab">Label</button>
       <button type="button" class="response-tab" role="tab" data-wf-tab="${idPrefix}-headers">Response Headers</button>
       <button type="button" class="response-tab" role="tab" data-wf-tab="${idPrefix}-debug">Debug</button>
     </div>
     <div class="response-panel" data-wf-panel="${idPrefix}-body">
       <div class="response-box"><pre id="${idPrefix}Out">{}</pre></div>
+    </div>
+    <div class="response-panel hidden" data-wf-panel="${idPrefix}-label">
       <div class="label-preview hidden" id="${idPrefix}LabelPreview"></div>
     </div>
     <div class="response-panel hidden" data-wf-panel="${idPrefix}-headers">
@@ -251,45 +254,53 @@ export function renderWorkflowPanel(workflow, ctx, stepStates, selectedStepId, r
     </div>`;
 }
 
-function bindResponseTabs(root) {
-  root.querySelectorAll("[data-wf-tab]").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      const name = tab.dataset.wfTab;
-      root.querySelectorAll("[data-wf-tab]").forEach((t) => {
-        const active = t.dataset.wfTab === name;
-        t.classList.toggle("active", active);
-        t.setAttribute("aria-selected", String(active));
-      });
-      root.querySelectorAll("[data-wf-panel]").forEach((panel) => {
-        panel.classList.toggle("hidden", panel.dataset.wfPanel !== name);
-      });
-    });
+function setWfTab(root, name) {
+  root.querySelectorAll("[data-wf-tab]").forEach((t) => {
+    const active = t.dataset.wfTab === name;
+    t.classList.toggle("active", active);
+    t.setAttribute("aria-selected", String(active));
+  });
+  root.querySelectorAll("[data-wf-panel]").forEach((panel) => {
+    panel.classList.toggle("hidden", panel.dataset.wfPanel !== name);
   });
 }
 
-function renderLabelPreview(host, payload) {
-  if (!host) return;
+function bindResponseTabs(root) {
+  root.querySelectorAll("[data-wf-tab]").forEach((tab) => {
+    tab.addEventListener("click", () => setWfTab(root, tab.dataset.wfTab));
+  });
+}
+
+function renderLabelPreview(host, payload, root) {
+  if (!host) return false;
+  const labelTab = root?.querySelector("#wfLabelTab");
   const entries = Array.isArray(payload?.data) ? payload.data : [payload?.data];
   const rawLabel = entries.find((entry) => typeof entry?.label === "string")?.label;
   if (!rawLabel) {
     host.classList.add("hidden");
     host.innerHTML = "";
-    return;
+    labelTab?.classList.add("hidden");
+    return false;
   }
   const source = rawLabel.startsWith("data:") ? rawLabel : `data:image/png;base64,${rawLabel.replace(/\s/g, "")}`;
   host.classList.remove("hidden");
   host.innerHTML = "";
   const heading = document.createElement("h3");
   heading.textContent = "Shipping label preview";
+  const frame = document.createElement("div");
+  frame.className = "label-preview-frame";
   const image = document.createElement("img");
   image.src = source;
   image.alt = "Shipping label returned by Shipmozo";
+  frame.append(image);
   const download = document.createElement("a");
   download.href = source;
   download.download = "shipmozo-label.png";
   download.className = "btn-secondary btn-sm";
   download.textContent = "Download label";
-  host.append(heading, image, download);
+  host.append(heading, frame, download);
+  labelTab?.classList.remove("hidden");
+  return true;
 }
 
 function renderStepResponse(root, api, ok, payload, wrapped, durationMs, step) {
@@ -319,7 +330,11 @@ function renderStepResponse(root, api, ok, payload, wrapped, durationMs, step) {
     2
   );
   if (step?.id === "get_order_label" || step?.id === "generate_label") {
-    renderLabelPreview(root.querySelector("#wfLabelPreview"), payload);
+    const shown = renderLabelPreview(root.querySelector("#wfLabelPreview"), payload, root);
+    setWfTab(root, shown ? "wf-label" : "wf-body");
+  } else {
+    root.querySelector("#wfLabelTab")?.classList.add("hidden");
+    setWfTab(root, "wf-body");
   }
 }
 
