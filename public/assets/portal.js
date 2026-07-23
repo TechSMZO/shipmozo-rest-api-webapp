@@ -1704,7 +1704,6 @@ function renderPhase1Tester(preselectId) {
 
   return `
     <div class="tester-layout" id="testerRoot">
-      <p class="page-lead">Requests go through this portal's proxy to <code>${getApiBase()}</code>&nbsp;(<strong>${esc(getBackendLabel())}</strong>). The response body below is the exact Shipmozo API body.</p>
       ${renderModeToggle(mode)}
       ${lifecycle ? "" : renderJourneyStrip()}
 
