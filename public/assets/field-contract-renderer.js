@@ -13,12 +13,17 @@ export async function loadFieldContracts() {
   return contractsCache;
 }
 
+function renderTip(entry) {
+  if (!entry?.tip) return "";
+  return `<p class="note tip field-contract-tip">${esc(entry.tip)}</p>`;
+}
+
 export function renderFieldContract(operationId, contracts) {
   const entry = contracts?.[operationId];
   if (!entry) {
     return `
       <div class="field-contract-section">
-        <h2>Field contract</h2>
+        <h2>Request Payload Reference</h2>
         <p class="muted">Not yet documented for this endpoint.</p>
       </div>`;
   }
@@ -26,21 +31,22 @@ export function renderFieldContract(operationId, contracts) {
   if (entry.deferred) {
     return `
       <div class="field-contract-section">
-        <h2>Field contract</h2>
-        <p class="note warn">NDR Action field contract is explicitly deferred — values not yet provided.</p>
+        <h2>Request Payload Reference</h2>
+        <p class="note warn">NDR Action request payload reference is explicitly deferred — values not yet provided.</p>
       </div>`;
   }
 
   if (entry.placeholder && (!entry.fields || !entry.fields.length)) {
     return `
       <div class="field-contract-section">
-        <h2>Field contract</h2>
-        <p class="note warn"><strong>[PLACEHOLDER — entire table]</strong> Full field contract not yet available for ${esc(entry.title || operationId)}.</p>
+        <h2>Request Payload Reference</h2>
+        ${renderTip(entry)}
+        <p class="note warn"><strong>[PLACEHOLDER — entire table]</strong> Full request payload reference not yet available for ${esc(entry.title || operationId)}.</p>
       </div>`;
   }
 
   const notice = entry.partialNotice
-    ? `<p class="note warn small">Full field contract not yet available — showing known fields only.</p>`
+    ? `<p class="note warn small">Full request payload reference not yet available — showing known fields only.</p>`
     : "";
 
   const rows = (entry.fields || [])
@@ -58,7 +64,8 @@ export function renderFieldContract(operationId, contracts) {
 
   return `
     <div class="field-contract-section">
-      <h2>Field contract</h2>
+      <h2>Request Payload Reference</h2>
+      ${renderTip(entry)}
       ${notice}
       <table class="field-contract-table">
         <thead>
@@ -78,8 +85,8 @@ export function renderFieldContract(operationId, contracts) {
 export function renderFieldContractCollapsible(operationId, contracts) {
   const inner = renderFieldContract(operationId, contracts);
   return `
-    <details class="field-contract-details">
-      <summary>Field contract table</summary>
+    <details class="field-contract-details" open>
+      <summary>Request Payload Reference</summary>
       ${inner}
     </details>`;
 }

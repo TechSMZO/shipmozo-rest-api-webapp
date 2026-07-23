@@ -60,6 +60,41 @@ a:hover { color: var(--brand-hover); }
   margin: 0 auto;
 }
 
+.sidebar-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  min-width: var(--touch-min);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.sidebar-toggle:hover {
+  background: var(--bg);
+  border-color: #cbd5e1;
+}
+
+.sidebar-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.sidebar-toggle-icon {
+  display: block;
+  transform: translateY(-1px);
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -280,7 +315,17 @@ a:hover { color: var(--brand-hover); }
   position: sticky;
   top: 56px;
   height: calc(100vh - 56px);
+  overflow-x: hidden;
   overflow-y: auto;
+  transition: width 0.22s ease, max-height 0.22s ease, border-color 0.22s ease, opacity 0.18s ease;
+}
+
+body.sidebar-collapsed .sidebar {
+  width: 0;
+  border-right-color: transparent;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
 }
 
 .sidebar-search {
@@ -735,14 +780,37 @@ tr:last-child td { border-bottom: none; }
 
 .tester-grid {
   display: grid;
-  grid-template-columns: minmax(340px, 0.92fr) minmax(0, 1.18fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
+}
+
+.tester-request-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.tester-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 960px;
+}
+
+.tester-field-contract-bottom {
+  margin-top: 4px;
 }
 
 .tester-form,
 .tester-response-card {
   min-width: 0;
+}
+
+.tester-response-card {
+  position: sticky;
+  top: 72px;
 }
 
 .tester-form label {
@@ -841,23 +909,15 @@ tr:last-child td { border-bottom: none; }
 
 .tester-actions { display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
 
-.tester-safety-note,
 .tester-unit-facts {
   font-size: 13px;
-  color: #92400e;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-bottom: 16px;
-  line-height: 1.45;
-}
-
-.tester-unit-facts {
   margin-bottom: 14px;
+  line-height: 1.45;
+  padding: 10px 12px;
+  border-radius: 8px;
   color: #1e40af;
   background: #eff6ff;
-  border-color: #bfdbfe;
+  border: 1px solid #bfdbfe;
 }
 
 .tester-enum-controls {
@@ -1412,13 +1472,46 @@ body.modal-open {
   margin: 0 0 12px;
 }
 
-/* Field contract tables */
+/* Field contract / Request Payload Reference tables */
 .field-contract-section { margin-top: 28px; }
 .field-contract-section h2 { font-size: 18px; margin-bottom: 12px; }
 .field-contract-table { width: 100%; font-size: 13px; }
 .field-contract-table th { text-align: left; background: #f8fafc; }
 .field-contract-details { margin: 12px 0; }
 .field-contract-details summary { cursor: pointer; font-weight: 600; font-size: 13px; padding: 8px 0; }
+.field-contract-tip,
+.note.tip {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.endpoint-doc-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+  margin-top: 20px;
+}
+.endpoint-doc-request,
+.endpoint-doc-responses {
+  min-width: 0;
+}
+.endpoint-doc-request .field-contract-section {
+  margin-top: 24px;
+}
+.endpoint-doc-responses .section {
+  margin-top: 0;
+}
+
+@media (max-width: 960px) {
+  .endpoint-doc-columns { grid-template-columns: 1fr; }
+}
 
 /* Demo mode */
 .demo-layout { max-width: 1100px; }
@@ -1588,8 +1681,16 @@ body.modal-open {
     top: 0;
     max-height: 40vh;
   }
+  body.sidebar-collapsed .sidebar {
+    width: 100%;
+    max-height: 0;
+    opacity: 0;
+    border-right: none;
+    border-bottom: none;
+  }
   .main { padding: 24px 20px; }
   .tester-grid { grid-template-columns: 1fr; }
+  .tester-response-card { position: static; }
   .topnav { display: none; }
   .demo-steps-grid,
   .demo-workflow-cards { grid-template-columns: 1fr; }

@@ -9,11 +9,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/assets/portal.css?v=32" />
+  <link rel="stylesheet" href="/assets/portal.css?v=38" />
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
+      <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-controls="sidebar" aria-expanded="true" aria-label="Close sidebar" title="Toggle sidebar">
+        <span class="sidebar-toggle-icon" aria-hidden="true">☰</span>
+      </button>
       <a href="#/" class="brand">
         <img src="/assets/shipmozo-logo.png" alt="Shipmozo" class="brand-logo" width="120" height="40" />
         <span class="brand-text"><span class="brand-sub">API Docs</span></span>
@@ -85,6 +88,6 @@
 
   <div class="toast-host" id="toastHost" aria-live="polite"></div>
 
-  <script src="/assets/portal.js?v=32" type="module"></script>
+  <script src="/assets/portal.js?v=38" type="module"></script>
 </body>
 </html>

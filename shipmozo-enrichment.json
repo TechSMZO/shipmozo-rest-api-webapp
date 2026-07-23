@@ -27,17 +27,37 @@
       "ShipmozoResponse": {
         "type": "object",
         "properties": {
-          "result": { "type": "string", "enum": ["0", "1"], "description": "1 = success, 0 = failure" },
-          "message": { "type": "string" },
-          "data": { "type": "object" }
+          "result": {
+            "type": "string",
+            "enum": [
+              "0",
+              "1"
+            ],
+            "description": "1 = success, 0 = failure"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          }
         }
       },
       "LoginRequest": {
         "type": "object",
-        "required": ["username", "password"],
+        "required": [
+          "username",
+          "password"
+        ],
         "properties": {
-          "username": { "type": "string", "description": "Panel username (email or phone)" },
-          "password": { "type": "string", "format": "password" }
+          "username": {
+            "type": "string",
+            "description": "Panel username (email or phone)"
+          },
+          "password": {
+            "type": "string",
+            "format": "password"
+          }
         }
       }
     },
@@ -46,8 +66,14 @@
         "description": "Invalid or missing API keys",
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/ShipmozoResponse" },
-            "example": { "result": "0", "message": "Invalid API credentials", "data": {} }
+            "schema": {
+              "$ref": "#/components/schemas/ShipmozoResponse"
+            },
+            "example": {
+              "result": "0",
+              "message": "Invalid API credentials",
+              "data": {}
+            }
           }
         }
       },
@@ -55,91 +81,429 @@
         "description": "Validation failed",
         "content": {
           "application/json": {
-            "example": { "result": "0", "message": "Validation error", "data": { "error": "order_id is required" } }
+            "example": {
+              "result": "0",
+              "message": "Validation error",
+              "data": {
+                "error": "order_id is required"
+              }
+            }
           }
         }
       },
       "RateLimited": {
         "description": "Too many requests",
         "headers": {
-          "Retry-After": { "schema": { "type": "integer" }, "description": "Seconds to wait before retry" }
+          "Retry-After": {
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Seconds to wait before retry"
+          }
         },
         "content": {
           "application/json": {
-            "example": { "result": "0", "message": "Rate limit exceeded", "data": {} }
+            "example": {
+              "result": "0",
+              "message": "Rate limit exceeded",
+              "data": {}
+            }
           }
         }
       }
     }
   },
-  "security": [{ "ApiKeyPublic": [] }, { "ApiKeyPrivate": [] }],
+  "security": [
+    {
+      "ApiKeyPublic": []
+    },
+    {
+      "ApiKeyPrivate": []
+    }
+  ],
   "x-portal": {
     "rateLimitHeaders": {
       "title": "Response headers (from live API / Swagger)",
       "description": "Shipmozo documents rate limits via response headers, not only in PDF copy. Read these on every call:",
       "headers": [
-        { "name": "x-ratelimit-limit", "example": "500", "meaning": "Max requests allowed in the current 1-minute window for your API key" },
-        { "name": "x-ratelimit-remaining", "example": "(live value)", "meaning": "Requests left in the current window — decreases by 1 on each API call you make. You only see a new number on the next HTTP response (the page does not auto-update). After ~60s without traffic, the next call usually shows remaining closer to 500 again (sliding window)." }
+        {
+          "name": "x-ratelimit-limit",
+          "example": "500",
+          "meaning": "Max requests allowed in the current 1-minute window for your API key"
+        },
+        {
+          "name": "x-ratelimit-remaining",
+          "example": "(live value)",
+          "meaning": "Requests left in the current window — decreases by 1 on each API call you make. You only see a new number on the next HTTP response (the page does not auto-update). After ~60s without traffic, the next call usually shows remaining closer to 500 again (sliding window)."
+        }
       ],
-      "note": "498 in tutorials means '2 calls used this minute' — not a fixed cap. Use the portal 'Check live rate limit' or Execute API to read current headers."
+      "note": "498 in tutorials means '2 calls used this minute' — not a fixed cap. Use Overview → Check now to read current headers."
     },
     "errorCodes": [
-      { "code": "PROFILE_UNDER_VERIFICATION", "result": "0", "typicalMessage": "Your profile is under verification", "when": "Seller KYC not completed or pending approval on Shipmozo panel", "action": "Finish verification in Shipmozo panel — keys are valid; APIs stay blocked until account is approved" },
-      { "code": "AUTH_INVALID", "result": "0", "typicalMessage": "Invalid API credentials", "when": "Wrong or missing public-key / private-key", "action": "Re-login via POST /login or verify panel keys" },
-      { "code": "AUTH_LOGIN_FAILED", "result": "0", "typicalMessage": "Invalid username or password", "when": "POST /login with bad credentials", "action": "Check panel username/password" },
-      { "code": "ORDER_NOT_FOUND", "result": "0", "typicalMessage": "Order not found", "when": "order_id unknown for assign, schedule, cancel, get-detail", "action": "Push order first; use same order_id as on your store" },
-      { "code": "ORDER_ALREADY_EXISTS", "result": "0", "typicalMessage": "Order already exists", "when": "Duplicate order_id on push-order", "action": "Use unique order_id or fetch existing via get-order-detail" },
-      { "code": "WAREHOUSE_REQUIRED", "result": "0", "typicalMessage": "warehouse_id is required", "when": "push-order without valid warehouse_id", "action": "Call get-warehouses or create-warehouse" },
-      { "code": "COURIER_ASSIGN_FAILED", "result": "0", "typicalMessage": "Courier assignment failed", "when": "Invalid courier_id or order state", "action": "Run rate-calculator; use returned courier_id" },
-      { "code": "AUTO_ASSIGN_NOT_CONFIGURED", "result": "0", "typicalMessage": "please setup auto assign", "when": "auto-assign-order without panel Settings > Auto assign", "action": "Enable auto-assign in Shipmozo panel or use assign-courier" },
-      { "code": "PICKUP_ALREADY_SCHEDULED", "result": "0", "typicalMessage": "Pickup already scheduled", "when": "schedule-pickup when pickups_automatically_scheduled = YES", "action": "Skip schedule-pickup; AWB already generated" },
-      { "code": "CANCEL_NOT_ALLOWED", "result": "0", "typicalMessage": "Cannot cancel order", "when": "Shipment picked up or delivered", "action": "Check order status via track-order" },
-      { "code": "AWB_NOT_FOUND", "result": "0", "typicalMessage": "AWB not found", "when": "track-order / get-order-label with invalid awb_number", "action": "Use awb_number from assign-courier or auto-assign response" },
-      { "code": "VALIDATION_ERROR", "result": "0", "typicalMessage": "Validation error", "when": "Missing required JSON fields", "action": "Fix request body per parameter table" },
-      { "code": "RATE_LIMIT", "result": "0", "typicalMessage": "Rate limit exceeded", "when": "x-ratelimit-remaining hits 0 within the 1-minute window or HTTP 429", "action": "Pause calls; retry after ~60s when remaining rises again" },
-      { "code": "CORS_TRAILING_SLASH", "result": "—", "typicalMessage": "Browser CORS error", "when": "Base URL ends with /", "action": "Use https://appiify.com/app/api/v1 without trailing slash" }
+      {
+        "code": "PROFILE_UNDER_VERIFICATION",
+        "result": "0",
+        "typicalMessage": "Your profile is under verification",
+        "when": "Seller KYC not completed or pending approval on Shipmozo panel",
+        "action": "Finish verification in Shipmozo panel — keys are valid; APIs stay blocked until account is approved"
+      },
+      {
+        "code": "AUTH_INVALID",
+        "result": "0",
+        "typicalMessage": "Invalid API credentials",
+        "when": "Wrong or missing public-key / private-key",
+        "action": "Re-login via POST /login or verify panel keys"
+      },
+      {
+        "code": "AUTH_LOGIN_FAILED",
+        "result": "0",
+        "typicalMessage": "Invalid username or password",
+        "when": "POST /login with bad credentials",
+        "action": "Check panel username/password"
+      },
+      {
+        "code": "ORDER_NOT_FOUND",
+        "result": "0",
+        "typicalMessage": "Order not found",
+        "when": "order_id unknown for assign, schedule, cancel, get-detail",
+        "action": "Push order first; use same order_id as on your store"
+      },
+      {
+        "code": "ORDER_ALREADY_EXISTS",
+        "result": "0",
+        "typicalMessage": "Order already exists",
+        "when": "Duplicate order_id on push-order",
+        "action": "Use unique order_id or fetch existing via get-order-detail"
+      },
+      {
+        "code": "WAREHOUSE_REQUIRED",
+        "result": "0",
+        "typicalMessage": "warehouse_id is required",
+        "when": "push-order without valid warehouse_id",
+        "action": "Call get-warehouses or create-warehouse"
+      },
+      {
+        "code": "COURIER_ASSIGN_FAILED",
+        "result": "0",
+        "typicalMessage": "Courier assignment failed",
+        "when": "Invalid courier_id or order state",
+        "action": "Run rate-calculator; use returned courier_id"
+      },
+      {
+        "code": "AUTO_ASSIGN_NOT_CONFIGURED",
+        "result": "0",
+        "typicalMessage": "please setup auto assign",
+        "when": "auto-assign-order without panel Settings > Auto assign",
+        "action": "Enable auto-assign in Shipmozo panel or use assign-courier"
+      },
+      {
+        "code": "PICKUP_ALREADY_SCHEDULED",
+        "result": "0",
+        "typicalMessage": "Pickup already scheduled",
+        "when": "schedule-pickup when pickups_automatically_scheduled = YES",
+        "action": "Skip schedule-pickup; AWB already generated"
+      },
+      {
+        "code": "CANCEL_NOT_ALLOWED",
+        "result": "0",
+        "typicalMessage": "Cannot cancel order",
+        "when": "Shipment picked up or delivered",
+        "action": "Check order status via track-order"
+      },
+      {
+        "code": "AWB_NOT_FOUND",
+        "result": "0",
+        "typicalMessage": "AWB not found",
+        "when": "track-order / get-order-label with invalid awb_number",
+        "action": "Use awb_number from assign-courier or auto-assign response"
+      },
+      {
+        "code": "VALIDATION_ERROR",
+        "result": "0",
+        "typicalMessage": "Validation error",
+        "when": "Missing required JSON fields",
+        "action": "Fix request body per parameter table"
+      },
+      {
+        "code": "RATE_LIMIT",
+        "result": "0",
+        "typicalMessage": "Rate limit exceeded",
+        "when": "x-ratelimit-remaining hits 0 within the 1-minute window or HTTP 429",
+        "action": "Pause calls; retry after ~60s when remaining rises again"
+      },
+      {
+        "code": "CORS_TRAILING_SLASH",
+        "result": "—",
+        "typicalMessage": "Browser CORS error",
+        "when": "Base URL ends with /",
+        "action": "Use https://appiify.com/app/api/v1 without trailing slash"
+      }
     ],
     "navigation": {
       "categories": [
-        { "id": "start-connect", "label": "Start & Connect", "keywords": ["start", "connect", "health", "authentication", "login"] },
-        { "id": "warehouses-pickup", "label": "Warehouses & Pickup Setup", "keywords": ["warehouse", "pickup", "location"] },
-        { "id": "domestic-shipments", "label": "Domestic Shipments", "keywords": ["domestic", "forward", "shipment", "courier", "rate", "pickup"] },
-        { "id": "labels-tracking", "label": "Labels & Tracking", "keywords": ["label", "manifest", "tracking", "awb"] },
-        { "id": "returns", "label": "Returns", "keywords": ["return", "reverse", "reason"] },
-        { "id": "international-shipments", "label": "International Shipments", "keywords": ["international", "country", "shipper", "export"] },
-        { "id": "order-management", "label": "Order Management & Exceptions", "keywords": ["order", "cancel", "ndr", "exception", "detail"] }
+        {
+          "id": "start-connect",
+          "label": "Start & Connect",
+          "keywords": [
+            "start",
+            "connect",
+            "health",
+            "authentication",
+            "login"
+          ]
+        },
+        {
+          "id": "warehouses-pickup",
+          "label": "Warehouses & Pickup Setup",
+          "keywords": [
+            "warehouse",
+            "pickup",
+            "location"
+          ]
+        },
+        {
+          "id": "domestic-shipments",
+          "label": "Domestic Shipments",
+          "keywords": [
+            "domestic",
+            "forward",
+            "shipment",
+            "courier",
+            "rate",
+            "pickup"
+          ]
+        },
+        {
+          "id": "labels-tracking",
+          "label": "Labels & Tracking",
+          "keywords": [
+            "label",
+            "manifest",
+            "tracking",
+            "awb"
+          ]
+        },
+        {
+          "id": "returns",
+          "label": "Returns",
+          "keywords": [
+            "return",
+            "reverse",
+            "reason"
+          ]
+        },
+        {
+          "id": "international-shipments",
+          "label": "International Shipments",
+          "keywords": [
+            "international",
+            "country",
+            "shipper",
+            "export"
+          ]
+        },
+        {
+          "id": "order-management",
+          "label": "Order Management & Exceptions",
+          "keywords": [
+            "order",
+            "cancel",
+            "ndr",
+            "exception",
+            "detail"
+          ]
+        }
       ],
       "operations": {
-        "getApiInfo": { "category": "start-connect", "order": 10, "keywords": ["api version", "health check"] },
-        "Login": { "category": "start-connect", "order": 20, "keywords": ["credentials", "api keys"] },
-
-        "getWarehouses": { "category": "warehouses-pickup", "order": 10, "keywords": ["warehouse id", "pickup address"] },
-        "createWarehouse": { "category": "warehouses-pickup", "order": 20, "keywords": ["new warehouse", "pickup location"] },
-        "orderUpdateWarehouse": { "category": "warehouses-pickup", "order": 30, "keywords": ["change warehouse", "order warehouse"] },
-
-        "pushOrders": { "category": "domestic-shipments", "order": 10, "keywords": ["create order", "forward order"] },
-        "pincodeServiceability": { "category": "domestic-shipments", "order": 15, "keywords": ["pincode", "serviceability", "lane"] },
-        "rateCalculator": { "category": "domestic-shipments", "order": 20, "keywords": ["rate", "courier id", "quote"] },
-        "assignCourier": { "category": "domestic-shipments", "order": 30, "keywords": ["assign", "courier", "awb"] },
-        "autoCourierAssign": { "category": "domestic-shipments", "order": 40, "keywords": ["auto assign", "courier", "awb"] },
-        "schedulePickup": { "category": "domestic-shipments", "order": 50, "keywords": ["schedule", "pickup"] },
-
-        "getOrderLabel": { "category": "labels-tracking", "order": 10, "keywords": ["shipping label", "awb"] },
-        "generateManifest": { "category": "labels-tracking", "order": 20, "keywords": ["manifest", "bulk awb"] },
-        "trackOrder": { "category": "labels-tracking", "order": 30, "keywords": ["track", "tracking status", "awb"] },
-
-        "getReturnReason": { "category": "returns", "order": 10, "keywords": ["return reason", "reverse shipment"] },
-        "pushReturnOrder": { "category": "returns", "order": 20, "keywords": ["return order", "reverse pickup"] },
-
-        "Countries": { "category": "international-shipments", "order": 10, "keywords": ["countries", "international"] },
-        "createShipper": { "category": "international-shipments", "order": 20, "keywords": ["shipper", "exporter"] },
-        "internationalRateCalculator": { "category": "international-shipments", "order": 30, "keywords": ["international rate", "export quote"] },
-        "internationalPushOrder": { "category": "international-shipments", "order": 40, "keywords": ["international order", "export shipment"] },
-
-        "getOrderDetail": { "category": "order-management", "order": 10, "keywords": ["order detail", "order status"] },
-        "cancelOrder": { "category": "order-management", "order": 20, "keywords": ["cancel", "cancel shipment"] },
-        "getAllNdrShipments": { "category": "order-management", "order": 30, "keywords": ["ndr", "non delivery"] },
-        "ndrOrderAction": { "category": "order-management", "order": 40, "keywords": ["ndr action", "reattempt", "rto"] }
+        "getApiInfo": {
+          "category": "start-connect",
+          "order": 10,
+          "keywords": [
+            "api version",
+            "health check"
+          ]
+        },
+        "Login": {
+          "category": "start-connect",
+          "order": 20,
+          "keywords": [
+            "credentials",
+            "api keys"
+          ]
+        },
+        "getWarehouses": {
+          "category": "warehouses-pickup",
+          "order": 10,
+          "keywords": [
+            "warehouse id",
+            "pickup address"
+          ]
+        },
+        "createWarehouse": {
+          "category": "warehouses-pickup",
+          "order": 20,
+          "keywords": [
+            "new warehouse",
+            "pickup location"
+          ]
+        },
+        "orderUpdateWarehouse": {
+          "category": "warehouses-pickup",
+          "order": 30,
+          "keywords": [
+            "change warehouse",
+            "order warehouse"
+          ]
+        },
+        "pushOrders": {
+          "category": "domestic-shipments",
+          "order": 10,
+          "keywords": [
+            "create order",
+            "forward order"
+          ]
+        },
+        "rateCalculator": {
+          "category": "domestic-shipments",
+          "order": 20,
+          "keywords": [
+            "rate",
+            "courier id",
+            "quote"
+          ]
+        },
+        "assignCourier": {
+          "category": "domestic-shipments",
+          "order": 30,
+          "keywords": [
+            "assign",
+            "courier",
+            "awb"
+          ]
+        },
+        "autoCourierAssign": {
+          "category": "domestic-shipments",
+          "order": 40,
+          "keywords": [
+            "auto assign",
+            "courier",
+            "awb"
+          ]
+        },
+        "schedulePickup": {
+          "category": "domestic-shipments",
+          "order": 50,
+          "keywords": [
+            "schedule",
+            "pickup"
+          ]
+        },
+        "getOrderLabel": {
+          "category": "labels-tracking",
+          "order": 10,
+          "keywords": [
+            "shipping label",
+            "awb"
+          ]
+        },
+        "generateManifest": {
+          "category": "labels-tracking",
+          "order": 20,
+          "keywords": [
+            "manifest",
+            "bulk awb"
+          ]
+        },
+        "trackOrder": {
+          "category": "labels-tracking",
+          "order": 30,
+          "keywords": [
+            "track",
+            "tracking status",
+            "awb"
+          ]
+        },
+        "getReturnReason": {
+          "category": "returns",
+          "order": 10,
+          "keywords": [
+            "return reason",
+            "reverse shipment"
+          ]
+        },
+        "pushReturnOrder": {
+          "category": "returns",
+          "order": 20,
+          "keywords": [
+            "return order",
+            "reverse pickup"
+          ]
+        },
+        "Countries": {
+          "category": "international-shipments",
+          "order": 10,
+          "keywords": [
+            "countries",
+            "international"
+          ]
+        },
+        "createShipper": {
+          "category": "international-shipments",
+          "order": 20,
+          "keywords": [
+            "shipper",
+            "exporter"
+          ]
+        },
+        "internationalRateCalculator": {
+          "category": "international-shipments",
+          "order": 30,
+          "keywords": [
+            "international rate",
+            "export quote"
+          ]
+        },
+        "internationalPushOrder": {
+          "category": "international-shipments",
+          "order": 40,
+          "keywords": [
+            "international order",
+            "export shipment"
+          ]
+        },
+        "getOrderDetail": {
+          "category": "order-management",
+          "order": 10,
+          "keywords": [
+            "order detail",
+            "order status"
+          ]
+        },
+        "cancelOrder": {
+          "category": "order-management",
+          "order": 20,
+          "keywords": [
+            "cancel",
+            "cancel shipment"
+          ]
+        },
+        "getAllNdrShipments": {
+          "category": "order-management",
+          "order": 30,
+          "keywords": [
+            "ndr",
+            "non delivery"
+          ]
+        },
+        "ndrOrderAction": {
+          "category": "order-management",
+          "order": 40,
+          "keywords": [
+            "ndr action",
+            "reattempt",
+            "rto"
+          ]
+        }
       }
     },
     "workflows": [
@@ -196,26 +560,55 @@
       }
     ],
     "glossary": [
-      { "term": "order_id", "meaning": "Your store's unique order ID; must match across push, assign, and cancel" },
-      { "term": "reference_id", "meaning": "Shipmozo reference (often same as order_id). Note: live response bodies spell this field `refrence_id`; preserve that spelling when parsing responses." },
-      { "term": "awb_number", "meaning": "Air Waybill tracking number from courier" },
-      { "term": "warehouse_id", "meaning": "Pickup location ID from get-warehouses / create-warehouse" },
-      { "term": "courier_id", "meaning": "Numeric ID from rate-calculator response" },
-      { "term": "pickups_automatically_scheduled", "meaning": "YES = skip schedule-pickup; NO = call schedule-pickup after assign" },
-      { "term": "NDR", "meaning": "Non-Delivery Report — failed delivery attempt" }
+      {
+        "term": "order_id",
+        "meaning": "Your store's unique order ID; must match across push, assign, and cancel"
+      },
+      {
+        "term": "reference_id",
+        "meaning": "Shipmozo reference (often same as order_id). Note: live response bodies spell this field `refrence_id`; preserve that spelling when parsing responses."
+      },
+      {
+        "term": "awb_number",
+        "meaning": "Air Waybill tracking number from courier"
+      },
+      {
+        "term": "warehouse_id",
+        "meaning": "Pickup location ID from get-warehouses / create-warehouse"
+      },
+      {
+        "term": "courier_id",
+        "meaning": "Numeric ID from rate-calculator response"
+      },
+      {
+        "term": "pickups_automatically_scheduled",
+        "meaning": "YES = skip schedule-pickup; NO = call schedule-pickup after assign"
+      },
+      {
+        "term": "NDR",
+        "meaning": "Non-Delivery Report — failed delivery attempt"
+      }
     ]
   },
   "operations": {
     "getApiInfo": {
       "security": [],
-      "summary": "API Health / Version",
-      "x-useCases": ["Health check before batch jobs", "Verify connectivity from new server"]
+      "summary": "Check API health / version",
+      "x-useCases": [
+        "Health check before batch jobs",
+        "Verify connectivity from new server"
+      ]
     },
     "Login": {
       "security": [],
       "summary": "Login & obtain API keys",
-      "x-useCases": ["Bootstrap integration — fetch public_key and private_key", "Rotate keys after password change"],
-      "x-errors": ["AUTH_LOGIN_FAILED"],
+      "x-useCases": [
+        "Bootstrap integration — fetch public_key and private_key",
+        "Rotate keys after password change"
+      ],
+      "x-errors": [
+        "AUTH_LOGIN_FAILED"
+      ],
       "responses": {
         "200": {
           "content": {
@@ -224,7 +617,13 @@
                 "example": {
                   "result": "1",
                   "message": "Success",
-                  "data": [{ "name": "Seller Name", "public_key": "YOUR_PUBLIC_KEY", "private_key": "YOUR_PRIVATE_KEY" }]
+                  "data": [
+                    {
+                      "name": "Seller Name",
+                      "public_key": "YOUR_PUBLIC_KEY",
+                      "private_key": "YOUR_PRIVATE_KEY"
+                    }
+                  ]
                 }
               }
             }
@@ -233,12 +632,19 @@
       }
     },
     "pushOrders": {
-      "summary": "Push Order",
-      "x-useCases": ["Sync e-commerce order to Shipmozo panel", "COD and prepaid orders"],
-      "x-errors": ["ORDER_ALREADY_EXISTS", "WAREHOUSE_REQUIRED", "VALIDATION_ERROR"]
+      "summary": "Create a new shipment order",
+      "x-useCases": [
+        "Sync e-commerce order to Shipmozo panel",
+        "COD and prepaid orders"
+      ],
+      "x-errors": [
+        "ORDER_ALREADY_EXISTS",
+        "WAREHOUSE_REQUIRED",
+        "VALIDATION_ERROR"
+      ]
     },
     "internationalPushOrder": {
-      "summary": "International Push Order",
+      "summary": "Create a new international shipment order",
       "responses": {
         "200": {
           "content": {
@@ -256,44 +662,83 @@
       }
     },
     "pushReturnOrder": {
-      "summary": "Push Return Order",
-      "x-useCases": ["Customer return with pickup from customer address"],
-      "x-errors": ["VALIDATION_ERROR", "ORDER_NOT_FOUND"]
+      "summary": "Create a return/reverse shipment order",
+      "x-useCases": [
+        "Customer return with pickup from customer address"
+      ],
+      "x-errors": [
+        "VALIDATION_ERROR",
+        "ORDER_NOT_FOUND"
+      ]
     },
     "assignCourier": {
-      "x-useCases": ["Manual courier selection after rate comparison"],
-      "x-errors": ["ORDER_NOT_FOUND", "COURIER_ASSIGN_FAILED"]
+      "x-useCases": [
+        "Manual courier selection after rate comparison"
+      ],
+      "x-errors": [
+        "ORDER_NOT_FOUND",
+        "COURIER_ASSIGN_FAILED"
+      ],
+      "summary": "Assign a courier and get the AWB"
     },
     "schedulePickup": {
-      "x-useCases": ["When rate-calculator returns pickups_automatically_scheduled: NO"],
-      "x-errors": ["ORDER_NOT_FOUND", "PICKUP_ALREADY_SCHEDULED"]
+      "x-useCases": [
+        "When rate-calculator returns pickups_automatically_scheduled: NO"
+      ],
+      "x-errors": [
+        "ORDER_NOT_FOUND",
+        "PICKUP_ALREADY_SCHEDULED"
+      ],
+      "summary": "Schedule a courier pickup"
     },
     "cancelOrder": {
-      "summary": "Cancel Order",
-      "x-useCases": ["Cancel before courier pickup"],
-      "x-errors": ["ORDER_NOT_FOUND", "CANCEL_NOT_ALLOWED"]
+      "summary": "Cancel an order",
+      "x-useCases": [
+        "Cancel before courier pickup"
+      ],
+      "x-errors": [
+        "ORDER_NOT_FOUND",
+        "CANCEL_NOT_ALLOWED"
+      ]
     },
     "autoCourierAssign": {
-      "x-useCases": ["One-shot assign when panel auto-assign is configured"],
-      "x-errors": ["AUTO_ASSIGN_NOT_CONFIGURED", "ORDER_NOT_FOUND"]
+      "x-useCases": [
+        "One-shot assign when panel auto-assign is configured"
+      ],
+      "x-errors": [
+        "AUTO_ASSIGN_NOT_CONFIGURED",
+        "ORDER_NOT_FOUND"
+      ],
+      "summary": "Auto-assign a courier (per panel settings)"
     },
     "trackOrder": {
-      "summary": "Track Order",
-      "x-errors": ["AWB_NOT_FOUND"]
+      "summary": "Track a shipment's status",
+      "x-errors": [
+        "AWB_NOT_FOUND"
+      ]
     },
     "getReturnReason": {
-      "summary": "Get Return Reason",
-      "security": [{ "ApiKeyPublic": [] }, { "ApiKeyPrivate": [] }],
-      "x-useCases": ["Populate return reason dropdown before push-return-order"]
+      "summary": "Get valid return reasons",
+      "security": [
+        {
+          "ApiKeyPublic": []
+        },
+        {
+          "ApiKeyPrivate": []
+        }
+      ],
+      "x-useCases": [
+        "Populate return reason dropdown before push-return-order"
+      ]
     },
     "createShipper": {
-      "summary": "Create Shipper"
+      "summary": "Register a shipper profile"
     },
     "createWarehouse": {
-      "summary": "Create Warehouse"
+      "summary": "Register a new warehouse"
     },
     "getAllNdrShipments": {
-      "summary": "Get NDR Orders",
+      "summary": "List failed-delivery (NDR) orders",
       "responses": {
         "200": {
           "content": {
@@ -310,27 +755,8 @@
         }
       }
     },
-    "pincodeServiceability": {
-      "summary": "Pincode Serviceability",
-      "x-useCases": ["Check lane before push-order at checkout"],
-      "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "example": {
-                  "result": "1",
-                  "message": "Success",
-                  "data": { "serviceable": true }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "Countries": {
-      "summary": "Get Countries",
+      "summary": "Get list of countries (for international shipments)",
       "responses": {
         "200": {
           "content": {
@@ -348,7 +774,7 @@
       }
     },
     "getOrderDetail": {
-      "summary": "Get Order Detail",
+      "summary": "Get full details of an order",
       "responses": {
         "200": {
           "content": {
@@ -366,7 +792,7 @@
       }
     },
     "generateManifest": {
-      "summary": "Generate Manifest",
+      "summary": "Generate a pickup manifest",
       "responses": {
         "200": {
           "content": {
@@ -398,7 +824,23 @@
             }
           }
         }
-      }
+      },
+      "summary": "Compare courier rates for an international shipment"
+    },
+    "rateCalculator": {
+      "summary": "Compare courier rates for a shipment"
+    },
+    "ndrOrderAction": {
+      "summary": "Take action on a failed delivery"
+    },
+    "getOrderLabel": {
+      "summary": "Download the shipping label"
+    },
+    "getWarehouses": {
+      "summary": "List your warehouses"
+    },
+    "orderUpdateWarehouse": {
+      "summary": "Change an order's linked warehouse"
     }
   }
 }

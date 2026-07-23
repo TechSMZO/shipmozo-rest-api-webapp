@@ -7,9 +7,9 @@ import {
   loadWorkflowContext,
   loadLifecycleScenarioId,
   getLifecycleWorkflow,
-} from "./workflow-tester.js?v=32";
-import { loadFieldContracts, renderFieldContract, renderFieldContractCollapsible } from "./field-contract-renderer.js?v=32";
-import { renderDemoPage, bindDemoPage } from "./demo-player.js?v=32";
+} from "./workflow-tester.js?v=34";
+import { loadFieldContracts, renderFieldContract } from "./field-contract-renderer.js?v=34";
+import { renderDemoPage, bindDemoPage } from "./demo-player.js?v=34";
 
 const API_BACKENDS = {
   dev: { label: "Dev server", baseUrl: "https://appiify.com/app/api/v1" },
@@ -18,6 +18,7 @@ const API_BACKENDS = {
 const AUTH_STORAGE = "shipmozo_api_keys";
 const AUTH_CONNECTED_STORAGE = "shipmozo_api_connected";
 const BACKEND_STORAGE = "shipmozo_api_backend";
+const SIDEBAR_STORAGE = "shipmozo_sidebar_collapsed";
 /** Static file works even when a generic static server is used; /api/spec.json needs node server.js */
 const POSTMAN_ASSETS = {
   collection: "/assets/shipmozo.postman_collection.json",
@@ -132,13 +133,6 @@ function renderSandboxWarningNote() {
     return `<div class="note warn"><strong>Live API:</strong> Requests hit production (<code>shipping-api.com</code>). Orders and AWBs are real. <strong>Dev keys do not authorize on Live</strong> — sign in (or paste Live panel keys) while Live is selected.</div>`;
   }
   return `<div class="note warn"><strong>Dev sandbox:</strong> Dev requests run against a live sandbox. Pushing an order creates a real order and AWB on your account — cancel test orders when you're done. <strong>Live keys do not authorize on Dev</strong> — each server has its own key pair.</div>`;
-}
-
-function renderTesterSafetyNote() {
-  if (backendEnv === "live") {
-    return `<div class="tester-safety-note"><strong>Live requests hit production:</strong> pushing an order creates a real order and AWB. Dev keys will return <code>unauthorised user access</code> on Live — connect Live keys for this server.</div>`;
-  }
-  return `<div class="tester-safety-note"><strong>Dev requests run against a live sandbox:</strong> pushing an order creates a real order and AWB on your account. Cancel test orders when you're done. Each server needs its own API keys.</div>`;
 }
 
 function sameKeyPair(a, b) {
@@ -966,7 +960,7 @@ function renderStaticIntro() {
 
     <div class="section">
       <h2>Rate limits</h2>
-      <p>All <strong>24 APIs</strong> share <strong>${g.limit || 500} requests per minute</strong> per API key. Each call lowers <code>x-ratelimit-remaining</code> by 1; when the minute ends, the counter <strong>refreshes</strong> back toward 500.</p>
+      <p>All <strong>${operations.length || 23} APIs</strong> share <strong>${g.limit || 500} requests per minute</strong> per API key. Each call lowers <code>x-ratelimit-remaining</code> by 1; when the minute ends, the counter <strong>refreshes</strong> back toward 500.</p>
       ${
         rlHeaders
           ? `<table style="margin-top:12px"><thead><tr><th>Header</th><th>Example</th><th>Meaning</th></tr></thead><tbody>${rlHeaders.headers
@@ -974,6 +968,7 @@ function renderStaticIntro() {
               .join("")}</tbody></table>`
           : ""
       }
+      ${renderLiveRateLimitBox()}
       <p style="margin-top:16px"><a href="#/errors">Error codes →</a></p>
     </div>
 
@@ -1139,7 +1134,7 @@ function renderBestPractices() {
       <ol>
         <li>Always check <code>result === "1"</code> before reading <code>data</code>.</li>
         <li>Use unique <code>order_id</code> values from your OMS — they are the join key across APIs.</li>
-        <li>Call <code>pincode-serviceability</code> and <code>rate-calculator</code> before <code>push-order</code> at checkout.</li>
+        <li>Call <code>rate-calculator</code> before <code>push-order</code> at checkout — an empty courier list means the pincode pair is not serviceable.</li>
         <li>Store <code>awb_number</code> from assign / auto-assign for tracking and labels.</li>
         <li>If <code>pickups_automatically_scheduled</code> is <code>NO</code>, call <code>schedule-pickup</code> after assign.</li>
         <li>Implement exponential backoff on rate-limit and 5xx responses.</li>
@@ -1171,9 +1166,10 @@ function renderEndpoint(item) {
   const errorEx = { result: "0", message: "Error description", data: { error: "details" } };
   const useCases = op["x-useCases"] || [];
   const errorRefs = op["x-errors"] || [];
-  const rateLine = formatRateLimitLine(op);
-  const rl = op["x-rateLimit"];
-  const rateNotes = typeof rl === "object" ? rl.notes : "";
+  const rateCalculatorTip =
+    path === "/rate-calculator"
+      ? `<div class="note tip"><strong>Tip:</strong> to check if a pincode pair is serviceable, call this endpoint — one or more couriers returned means the route is serviceable. An empty list or <code>result: "0"</code> means not serviceable.</div>`
+      : "";
 
   return `
     <article class="endpoint-header">
@@ -1187,64 +1183,70 @@ function renderEndpoint(item) {
       </div>
 
       <div class="meta-pills">
-        <span class="pill">Rate limit: ${esc(rateLine)}</span>
         ${needsAuth(op) ? `<span class="pill pill-auth">Requires API keys</span>` : `<span class="pill">No auth</span>`}
       </div>
-      ${rateNotes ? `<p class="muted small">${esc(rateNotes)}</p>` : ""}
 
       <div class="url-box card" style="margin:16px 0">
         <label>${esc(getBackendLabel())} URL</label>
         <code>${esc(fullUrl)}</code>
       </div>
 
-      ${
-        useCases.length
-          ? `<div class="section"><h2>Use cases</h2><ul>${useCases.map((u) => `<li>${esc(u)}</li>`).join("")}</ul></div>`
-          : ""
-      }
+      <div class="endpoint-doc-columns">
+        <div class="endpoint-doc-request">
+          ${rateCalculatorTip}
+          ${
+            useCases.length
+              ? `<div class="section"><h2>Use cases</h2><ul>${useCases.map((u) => `<li>${esc(u)}</li>`).join("")}</ul></div>`
+              : ""
+          }
 
-      <div class="section">
-        <h2>Request</h2>
-        <h3>Headers</h3>
-        ${renderParamTable(
-          params.filter((p) => p.in === "header").length
-            ? params.filter((p) => p.in === "header")
-            : needsAuth(op)
-              ? [
-                  { name: "public-key", in: "header", required: true, schema: { type: "string" }, description: "API public key" },
-                  { name: "private-key", in: "header", required: true, schema: { type: "string" }, description: "API private key" },
-                  { name: "Content-Type", in: "header", required: method !== "GET", schema: { type: "string" }, description: "application/json for POST bodies" },
-                ]
-              : [{ name: "Content-Type", in: "header", required: false, schema: { type: "string" }, description: "application/json when sending body" }]
-        )}
-        <h3>Path &amp; query</h3>
-        ${renderParamTable(params.filter((p) => p.in === "path" || p.in === "query"))}
-        ${
-          bodyExample
-            ? `<h3>Body example</h3>${renderCodeTabs(
-                buildCurl(method, fullUrl, headers, bodyExample),
-                buildNode(method, fullUrl, headers, bodyExample),
-                buildPython(method, fullUrl, headers, bodyExample)
-              )}`
-            : ""
-        }
-      </div>
+          <div class="section">
+            <h2>Request</h2>
+            <h3>Headers</h3>
+            ${renderParamTable(
+              params.filter((p) => p.in === "header").length
+                ? params.filter((p) => p.in === "header")
+                : needsAuth(op)
+                  ? [
+                      { name: "public-key", in: "header", required: true, schema: { type: "string" }, description: "API public key" },
+                      { name: "private-key", in: "header", required: true, schema: { type: "string" }, description: "API private key" },
+                      { name: "Content-Type", in: "header", required: method !== "GET", schema: { type: "string" }, description: "application/json for POST bodies" },
+                    ]
+                  : [{ name: "Content-Type", in: "header", required: false, schema: { type: "string" }, description: "application/json when sending body" }]
+            )}
+            <h3>Path &amp; query</h3>
+            ${renderParamTable(params.filter((p) => p.in === "path" || p.in === "query"))}
+            ${
+              bodyExample
+                ? `<h3>Body example</h3>${renderCodeTabs(
+                    buildCurl(method, fullUrl, headers, bodyExample),
+                    buildNode(method, fullUrl, headers, bodyExample),
+                    buildPython(method, fullUrl, headers, bodyExample)
+                  )}`
+                : ""
+            }
+          </div>
 
-      <div class="section">
-        <h2>Responses</h2>
-        <h3><span class="status-pill status-2xx">result: 1</span> Success</h3>
-        <div class="code-block-wrap"><pre><code>${esc(JSON.stringify(successEx, null, 2))}</code></pre></div>
-        <h3><span class="status-pill status-4xx">result: 0</span> Failure</h3>
-        <div class="code-block-wrap"><pre><code>${esc(JSON.stringify(errorEx, null, 2))}</code></pre></div>
-        ${
-          errorRefs.length
-            ? `<p>Common errors: ${errorRefs.map((c) => `<a href="#/errors">${esc(c)}</a>`).join(", ")}</p>`
-            : ""
-        }
+          ${renderFieldContract(op.operationId, fieldContracts)}
+        </div>
+
+        <aside class="endpoint-doc-responses">
+          <div class="section">
+            <h2>Responses</h2>
+            <h3><span class="status-pill status-2xx">result: 1</span> Success</h3>
+            <div class="code-block-wrap"><pre><code>${esc(JSON.stringify(successEx, null, 2))}</code></pre></div>
+            <h3><span class="status-pill status-4xx">result: 0</span> Failure</h3>
+            <div class="code-block-wrap"><pre><code>${esc(JSON.stringify(errorEx, null, 2))}</code></pre></div>
+            ${
+              errorRefs.length
+                ? `<p>Common errors: ${errorRefs.map((c) => `<a href="#/errors">${esc(c)}</a>`).join(", ")}</p>`
+                : ""
+            }
+          </div>
+        </aside>
       </div>
 
       <p style="margin-top:24px"><a href="#/execute?op=${encodeURIComponent(item.id)}" class="btn-primary inline-btn">Test this API →</a></p>
-      ${renderFieldContract(op.operationId, fieldContracts)}
     </article>`;
 }
 
@@ -1451,19 +1453,17 @@ function renderTester(preselectId) {
           <label for="testerOp">API endpoint</label>
           <select id="testerOp" aria-label="API endpoint">${opts}</select>
           <div id="testerPrereq" class="tester-prereq hidden"></div>
-          <div id="testerParams"></div>
-          <label for="testerBody">Request body (JSON)</label>
-          <textarea id="testerBody" rows="12" placeholder="{}" aria-label="Request body (JSON)"></textarea>
-          <div id="testerEnumHints" class="tester-enum-hints hidden"></div>
           <div class="tester-actions">
             <button type="button" class="btn-primary" id="testerRun">Execute API</button>
             <button type="button" class="btn-secondary" id="testerCurl">Copy cURL</button>
-            <button type="button" class="btn-secondary" id="testerRateBtn">Check rate limit</button>
           </div>
           <p class="muted small" id="testerAuthHint"></p>
-          <div class="rate-live-values small" id="testerRateLive">Rate limit: click Execute or Check rate limit</div>
+          <div id="testerEnumHints" class="tester-enum-hints hidden"></div>
+          <div id="testerParams"></div>
+          <label for="testerBody">Request body (JSON)</label>
+          <textarea id="testerBody" rows="12" placeholder="{}" aria-label="Request body (JSON)"></textarea>
         </div>
-        <div class="card">
+        <div class="card tester-response-card">
           <h2 class="tester-response-title">Response</h2>
           <div class="response-meta" id="testerMeta">Select an API and click Execute.</div>
           <div class="response-box"><pre id="testerOut">{}</pre></div>
@@ -1602,13 +1602,6 @@ function bindTester(preselectId) {
         body,
       });
       let meta = `${wrapped.status} ${wrapped.statusText || ""} · ${wrapped.url || path}`.trim();
-      if (wrapped.rateLimit?.limit) {
-        meta += ` · Rate limit: ${wrapped.rateLimit.remaining ?? "?"}/${wrapped.rateLimit.limit} @ ${wrapped.rateLimit.observedAt || ""}`;
-        const rlEl = $("#testerRateLive");
-        if (rlEl) {
-          rlEl.innerHTML = `Live headers: <strong>${esc(String(wrapped.rateLimit.remaining))}</strong> / ${esc(String(wrapped.rateLimit.limit))} remaining (this request)`;
-        }
-      }
       $("#testerMeta").textContent = meta;
       if (wrapped.error === "UPSTREAM_HTML") {
         $("#testerOut").parentElement?.classList.add("error");
@@ -1637,12 +1630,7 @@ function bindTester(preselectId) {
         } else if (banner) {
           banner.remove();
         }
-        const display = {
-          rateLimit: wrapped.rateLimit,
-          rateLimitHeaders: wrapped.rateLimitHeaders,
-          shipmozo: payload,
-        };
-        pre.textContent = JSON.stringify(display, null, 2);
+        pre.textContent = JSON.stringify(payload, null, 2);
       }
     } catch (e) {
       $("#testerMeta").textContent = "Request failed";
@@ -1650,20 +1638,6 @@ function bindTester(preselectId) {
       $("#testerOut").textContent = String(e.message);
     } finally {
       runBtn.disabled = false;
-    }
-  });
-
-  $("#testerRateBtn")?.addEventListener("click", async () => {
-    const rlEl = $("#testerRateLive");
-    if (rlEl) rlEl.textContent = "Checking…";
-    try {
-      const live = await fetchLiveRateLimit();
-      const rl = live.rateLimit;
-      if (rlEl && rl?.limit) {
-        rlEl.innerHTML = `Live headers: <strong>${esc(String(rl.remaining))}</strong> / ${esc(String(rl.limit))} via <code>${esc(live.via)}</code> @ ${esc(rl.observedAt || "")}`;
-      }
-    } catch (e) {
-      if (rlEl) rlEl.textContent = e.message;
     }
   });
 
@@ -1730,49 +1704,46 @@ function renderPhase1Tester(preselectId) {
 
   return `
     <div class="tester-layout" id="testerRoot">
-      <h1 class="page-title">API Tester</h1>
       <p class="page-lead">Requests go through this portal's proxy to <code>${getApiBase()}</code>&nbsp;(<strong>${esc(getBackendLabel())}</strong>). The response body below is the exact Shipmozo API body.</p>
       ${renderModeToggle(mode)}
-      ${renderTesterSafetyNote()}
       ${lifecycle ? "" : renderJourneyStrip()}
 
       <div id="singleModePanel" class="${lifecycle ? "hidden" : ""}">
       <div class="tester-grid">
-        <div class="card tester-form" id="testerForm">
-          <label for="testerScenario">Load scenario</label>
-          <select id="testerScenario" aria-label="Load scenario"><option value="">— Choose a scenario —</option></select>
-          <p class="scenario-expected hidden" id="testerScenarioExpected"></p>
-          <label for="testerOp">API endpoint</label>
-          <select id="testerOp" aria-label="API endpoint">${opts}</select>
-          <div id="testerPrereq" class="tester-prereq hidden"></div>
-          <div id="testerUnitFacts" class="tester-unit-facts hidden"></div>
-          <div id="testerFieldContract"></div>
-          <div id="testerParams"></div>
-          <label for="testerBody">Request body (JSON)</label>
-          <div id="testerBodyHints" class="tester-body-hints hidden"></div>
-          <textarea id="testerBody" rows="12" placeholder="{}" aria-label="Request body (JSON)"></textarea>
-          <div id="testerEnumControls" class="tester-enum-controls hidden"></div>
-          <div class="tester-actions">
-            <button type="button" class="btn-primary" id="testerRun">Execute API</button>
-            <button type="button" class="btn-secondary" id="testerCurl">Copy cURL</button>
-            <button type="button" class="btn-secondary" id="testerCopyRequest">Copy request</button>
-            <button type="button" class="btn-secondary" id="testerReset">Reset example</button>
-            <button type="button" class="btn-secondary" id="testerRateBtn">Check rate limit</button>
+        <div class="tester-request-col">
+          <div class="card tester-form" id="testerForm">
+            <label for="testerOp">API endpoint</label>
+            <select id="testerOp" aria-label="API endpoint">${opts}</select>
+            <label for="testerScenario">Load scenario</label>
+            <select id="testerScenario" aria-label="Load scenario"><option value="">— Choose a scenario —</option></select>
+            <p class="scenario-expected hidden" id="testerScenarioExpected"></p>
+            <div id="testerPrereq" class="tester-prereq hidden"></div>
+            <div id="testerUnitFacts" class="tester-unit-facts hidden"></div>
+            <div class="tester-actions">
+              <button type="button" class="btn-primary" id="testerRun">Execute API</button>
+              <button type="button" class="btn-secondary" id="testerCurl">Copy cURL</button>
+              <button type="button" class="btn-secondary" id="testerCopyRequest">Copy request</button>
+              <button type="button" class="btn-secondary" id="testerCopyResponse">Copy response</button>
+              <button type="button" class="btn-secondary" id="testerReset">Reset example</button>
+            </div>
+            <p class="muted small" id="testerAuthHint"></p>
+            <div id="testerEnumControls" class="tester-enum-controls hidden"></div>
+            <div id="testerParams"></div>
+            <label for="testerBody">Request body (JSON)</label>
+            <div id="testerBodyHints" class="tester-body-hints hidden"></div>
+            <textarea id="testerBody" rows="12" placeholder="{}" aria-label="Request body (JSON)"></textarea>
           </div>
-          <p class="muted small" id="testerAuthHint"></p>
-          <div class="rate-live-values small" id="testerRateLive">Rate limit: click Execute or Check rate limit</div>
+          <div id="testerFieldContract" class="tester-field-contract-bottom"></div>
         </div>
         <div class="card tester-response-card">
           <div class="tester-response-head">
             <h2 class="tester-response-title">Response</h2>
-            <button type="button" class="btn-secondary btn-sm" id="testerCopyResponse">Copy response</button>
           </div>
           <div class="response-meta" id="testerMeta">Select an API and click Execute.</div>
           <div class="result-banner hidden" id="testerResultBanner" role="status"></div>
           <div class="response-tabs" role="tablist" aria-label="Response views">
             <button type="button" class="response-tab active" role="tab" aria-selected="true" data-response-tab="body">Response Body</button>
             <button type="button" class="response-tab hidden" role="tab" aria-selected="false" data-response-tab="label" id="testerLabelTab">Label</button>
-            <button type="button" class="response-tab" role="tab" aria-selected="false" data-response-tab="headers">Response Headers</button>
             <button type="button" class="response-tab" role="tab" aria-selected="false" data-response-tab="debug">Debug</button>
           </div>
           <div class="response-panel" data-response-panel="body">
@@ -1780,9 +1751,6 @@ function renderPhase1Tester(preselectId) {
           </div>
           <div class="response-panel hidden" data-response-panel="label">
             <div class="label-preview hidden" id="testerLabelPreview"></div>
-          </div>
-          <div class="response-panel hidden" data-response-panel="headers">
-            <div class="response-box"><pre id="testerHeadersOut">{}</pre></div>
           </div>
           <div class="response-panel hidden" data-response-panel="debug">
             <div class="response-box"><pre id="testerDebugOut">{}</pre></div>
@@ -1935,12 +1903,10 @@ function bindPhase1Tester(preselectId) {
   function renderResponse(payload, wrapped, durationMs) {
     latestResponseBody = payload ?? {};
     $("#testerOut").textContent = JSON.stringify(latestResponseBody, null, 2);
-    $("#testerHeadersOut").textContent = JSON.stringify(wrapped.rateLimitHeaders || {}, null, 2);
     $("#testerDebugOut").textContent = JSON.stringify(
       {
         httpStatus: wrapped.status ?? 200,
         requestDurationMs: Math.round(durationMs),
-        rateLimit: wrapped.rateLimit || {},
       },
       null,
       2
@@ -2014,7 +1980,7 @@ function bindPhase1Tester(preselectId) {
     unitFactsEl.classList.toggle("hidden", !facts);
     unitFactsEl.textContent = facts || "";
     if (fieldContractEl) {
-      fieldContractEl.innerHTML = renderFieldContractCollapsible(item.op.operationId, fieldContracts);
+      fieldContractEl.innerHTML = renderFieldContract(item.op.operationId, fieldContracts);
     }
     if (bodyHintsEl && fieldHints) {
       const hints = Object.entries(fieldHints)
@@ -2185,9 +2151,6 @@ function bindPhase1Tester(preselectId) {
       updateJourneyFromCall(item, wrapped.data);
       const strip = document.querySelector(".journey-strip");
       if (strip) strip.outerHTML = renderJourneyStrip();
-      if (wrapped.rateLimit?.limit) {
-        $("#testerRateLive").innerHTML = `Live headers: <strong>${esc(String(wrapped.rateLimit.remaining))}</strong> / ${esc(String(wrapped.rateLimit.limit))} remaining (this request)`;
-      }
     } catch (error) {
       const durationMs = performance.now() - startedAt;
       $("#testerMeta").textContent = `Request failed · ${Math.round(durationMs)} ms`;
@@ -2221,22 +2184,6 @@ function bindPhase1Tester(preselectId) {
       return;
     }
     copyText(buildCurl(item.method, getApiBase() + path, authHeaders(), body), "cURL");
-  });
-
-  $("#testerRateBtn")?.addEventListener("click", async () => {
-    const rateLimitOutput = $("#testerRateLive");
-    rateLimitOutput.textContent = "Checking…";
-    try {
-      const live = await fetchLiveRateLimit();
-      const rateLimit = live.rateLimit;
-      if (rateLimit?.limit) {
-        rateLimitOutput.innerHTML = `Live headers: <strong>${esc(String(rateLimit.remaining))}</strong> / ${esc(String(rateLimit.limit))} via <code>${esc(live.via)}</code> @ ${esc(rateLimit.observedAt || "")}`;
-      } else {
-        rateLimitOutput.textContent = "No rate-limit headers returned.";
-      }
-    } catch (error) {
-      rateLimitOutput.textContent = error.message;
-    }
   });
 }
 
@@ -2335,6 +2282,7 @@ async function route() {
   if (hash === "#/" || hash === "#") {
     main.innerHTML = renderStaticIntro();
     bindCodeTabs(main);
+    bindLiveRateLimit(main);
     $("#heroConnectBtn")?.addEventListener("click", openAuthDialog);
     return;
   }
@@ -2536,12 +2484,76 @@ function showProxyWarning() {
   main.prepend(banner);
 }
 
+function isMobileLayout() {
+  return window.matchMedia("(max-width: 960px)").matches;
+}
+
+function getSidebarCollapsedPref() {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_STORAGE);
+    if (raw === "1") return true;
+    if (raw === "0") return false;
+  } catch {
+    /* ignore */
+  }
+  return isMobileLayout();
+}
+
+function setSidebarCollapsed(collapsed, { persist = true } = {}) {
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  const sidebar = $("#sidebar");
+  const btn = $("#sidebarToggle");
+  if (sidebar) {
+    sidebar.setAttribute("aria-hidden", collapsed ? "true" : "false");
+    if (collapsed) sidebar.setAttribute("inert", "");
+    else sidebar.removeAttribute("inert");
+  }
+  if (btn) {
+    btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    btn.setAttribute("aria-label", collapsed ? "Open sidebar" : "Close sidebar");
+    btn.title = collapsed ? "Open sidebar" : "Close sidebar";
+  }
+  if (persist) {
+    try {
+      localStorage.setItem(SIDEBAR_STORAGE, collapsed ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function bindSidebarToggle() {
+  const btn = $("#sidebarToggle");
+  if (!btn) return;
+
+  setSidebarCollapsed(getSidebarCollapsedPref());
+
+  btn.addEventListener("click", () => {
+    setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
+  });
+
+  $("#sidebarNav")?.addEventListener("click", (e) => {
+    if (!isMobileLayout()) return;
+    if (e.target.closest("a.nav-link")) setSidebarCollapsed(true);
+  });
+
+  window.matchMedia("(max-width: 960px)").addEventListener("change", () => {
+    try {
+      if (localStorage.getItem(SIDEBAR_STORAGE) != null) return;
+    } catch {
+      /* ignore */
+    }
+    setSidebarCollapsed(isMobileLayout(), { persist: false });
+  });
+}
+
 async function init() {
   loadBackend();
   loadCredentials();
   syncBackendUI();
   bindAuthDialog();
   bindBackendSwitch();
+  bindSidebarToggle();
   refreshAuthStatusFromKeys();
   try {
     await loadSpec();

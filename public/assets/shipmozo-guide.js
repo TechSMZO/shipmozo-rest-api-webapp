@@ -34,7 +34,7 @@ export const GLOBAL = {
     { code: "ORDER_ALREADY_ASSIGNED", http: "200", meaning: "Courier already assigned", action: "Use track-order or cancel before re-assign" },
     { code: "AUTO_ASSIGN_NOT_CONFIGURED", http: "200", meaning: "Panel auto-assign not set", action: 'Enable Settings → Auto assign or use assign-courier' },
     { code: "PICKUP_AUTO_SCHEDULED", http: "200", meaning: "Manual schedule-pickup not needed", action: "Skip schedule-pickup when rate-calculator returns pickups_automatically_scheduled=YES" },
-    { code: "PINCODE_NOT_SERVICEABLE", http: "200", meaning: "Lane not serviceable", action: "Call pincode-serviceability before push-order" },
+    { code: "PINCODE_NOT_SERVICEABLE", http: "200", meaning: "Lane not serviceable", action: "Call rate-calculator — empty courier list means not serviceable" },
     { code: "WAREHOUSE_REQUIRED", http: "200", meaning: "Invalid/missing warehouse_id", action: "create-warehouse or get-warehouses" },
     { code: "CORS_TRAILING_SLASH", http: "—", meaning: "Base URL has trailing /", action: "Use https://appiify.com/app/api/v1 without trailing slash" },
     { code: "RATE_LIMIT", http: "429", meaning: "Too many requests", action: "Exponential backoff; honor Retry-After if present" },
@@ -46,9 +46,8 @@ export const GLOBAL = {
       steps: [
         "POST /login → store public_key & private_key",
         "GET /info (health)",
-        "POST /pincode-serviceability",
         "POST /create-warehouse (once) or GET /get-warehouses",
-        "POST /rate-calculator → pick courier_id",
+        "POST /rate-calculator → pick courier_id (empty courier list = not serviceable)",
         "POST /push-order",
         "POST /assign-courier",
         "If pickups_automatically_scheduled=NO → POST /schedule-pickup",
@@ -106,11 +105,6 @@ export const ENDPOINTS = {
       { when: "Invalid username/password", message: "Success with result=0 or auth error", fix: "Use panel credentials" },
     ],
     notes: ["Response data[0] contains public_key and private_key — store securely server-side."],
-  },
-  pincodeServiceability: {
-    rateLimit: "500 (shared quota)",
-    useCases: ["Checkout pincode validation", "Pre-quote serviceability"],
-    errors: [{ when: "Invalid pincode", message: "serviceable: false", fix: "Try alternate hub or courier" }],
   },
   pushOrders: {
     rateLimit: "500 (shared quota)",
@@ -171,8 +165,11 @@ export const ENDPOINTS = {
   rateCalculator: {
     rateLimit: "500 (shared quota)",
     useCases: ["Checkout shipping quotes", "Compare couriers before assign"],
-    errors: [{ when: "Unserviceable lane", message: "Empty or error in data", fix: "Use pincode-serviceability first" }],
-    notes: ["Check pickups_automatically_scheduled in response for schedule-pickup decision"],
+    errors: [{ when: "Unserviceable lane", message: "Empty courier list or result 0", fix: "Try different pincodes — empty data[] means not serviceable" }],
+    notes: [
+      "Check pickups_automatically_scheduled in response for schedule-pickup decision",
+      "Tip: one or more couriers in data[] means the pincode pair is serviceable",
+    ],
   },
   getReturnReason: {
     rateLimit: "500 (shared quota)",
