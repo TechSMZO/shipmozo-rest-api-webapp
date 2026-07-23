@@ -740,6 +740,17 @@ tr:last-child td { border-bottom: none; }
   align-items: start;
 }
 
+.tester-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 960px;
+}
+
+.tester-field-contract-bottom {
+  margin-top: 4px;
+}
+
 .tester-form,
 .tester-response-card {
   min-width: 0;
@@ -1412,13 +1423,38 @@ body.modal-open {
   margin: 0 0 12px;
 }
 
-/* Field contract tables */
+/* Field contract / Request Payload Reference tables */
 .field-contract-section { margin-top: 28px; }
 .field-contract-section h2 { font-size: 18px; margin-bottom: 12px; }
 .field-contract-table { width: 100%; font-size: 13px; }
 .field-contract-table th { text-align: left; background: #f8fafc; }
 .field-contract-details { margin: 12px 0; }
 .field-contract-details summary { cursor: pointer; font-weight: 600; font-size: 13px; padding: 8px 0; }
+.field-contract-tip,
+.note.tip {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.endpoint-doc-columns {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(0, 1.15fr);
+  gap: 28px;
+  align-items: start;
+  margin-top: 20px;
+}
+.endpoint-doc-contract .field-contract-section { margin-top: 0; }
+.endpoint-doc-main { min-width: 0; }
+
+@media (max-width: 960px) {
+  .endpoint-doc-columns { grid-template-columns: 1fr; }
+}
 
 /* Demo mode */
 .demo-layout { max-width: 1100px; }

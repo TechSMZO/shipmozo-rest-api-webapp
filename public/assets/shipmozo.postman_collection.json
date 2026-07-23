@@ -24,7 +24,7 @@
       "name": "Common",
       "item": [
         {
-          "name": "API Health / Version",
+          "name": "Check API health / version",
           "request": {
             "method": "GET",
             "header": [
@@ -45,33 +45,7 @@
       "name": "Label",
       "item": [
         {
-          "name": "Generate Manifest",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "public-key",
-                "value": "{{public-key}}",
-                "type": "text"
-              },
-              {
-                "key": "private-key",
-                "value": "{{private-key}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/generate-manifest?awb_numbers=%7B%7Bawb_numbers%7D%7D",
-            "description": "Generate Manifest"
-          },
-          "response": []
-        },
-        {
-          "name": "Get Order Label",
+          "name": "Download the shipping label",
           "request": {
             "method": "GET",
             "header": [
@@ -95,6 +69,32 @@
             "description": "Get Order Label"
           },
           "response": []
+        },
+        {
+          "name": "Generate a pickup manifest",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/generate-manifest?awb_numbers=%7B%7Bawb_numbers%7D%7D",
+            "description": "Generate Manifest"
+          },
+          "response": []
         }
       ]
     },
@@ -102,7 +102,7 @@
       "name": "Orders",
       "item": [
         {
-          "name": "Assign Courier",
+          "name": "Assign a courier and get the AWB",
           "request": {
             "method": "POST",
             "header": [
@@ -142,7 +142,7 @@
           "response": []
         },
         {
-          "name": "Auto Assign Order",
+          "name": "Auto-assign a courier (per panel settings)",
           "request": {
             "method": "POST",
             "header": [
@@ -182,7 +182,7 @@
           "response": []
         },
         {
-          "name": "Cancel Order",
+          "name": "Cancel an order",
           "request": {
             "method": "POST",
             "header": [
@@ -222,59 +222,7 @@
           "response": []
         },
         {
-          "name": "Get NDR Orders",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "public-key",
-                "value": "{{public-key}}",
-                "type": "text"
-              },
-              {
-                "key": "private-key",
-                "value": "{{private-key}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/get-ndr-all?from=%7B%7Bfrom%7D%7D&to=%7B%7Bto%7D%7D&per_page=%7B%7Bper_page%7D%7D&page=%7B%7Bpage%7D%7D",
-            "description": "Get Ndr Orders"
-          },
-          "response": []
-        },
-        {
-          "name": "Get Order Detail",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "public-key",
-                "value": "{{public-key}}",
-                "type": "text"
-              },
-              {
-                "key": "private-key",
-                "value": "{{private-key}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/get-order-detail/{{order_id}}",
-            "description": "Get Order Detail"
-          },
-          "response": []
-        },
-        {
-          "name": "International Push Order",
+          "name": "Create a new international shipment order",
           "request": {
             "method": "POST",
             "header": [
@@ -314,33 +262,7 @@
           "response": []
         },
         {
-          "name": "NDR Action",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "public-key",
-                "value": "{{public-key}}",
-                "type": "text"
-              },
-              {
-                "key": "private-key",
-                "value": "{{private-key}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/ndr-action/{{awb_number}}?action=%7B%7Baction%7D%7D",
-            "description": "NDR Action"
-          },
-          "response": []
-        },
-        {
-          "name": "Push Order",
+          "name": "Create a new shipment order",
           "request": {
             "method": "POST",
             "header": [
@@ -380,7 +302,7 @@
           "response": []
         },
         {
-          "name": "Push Return Order",
+          "name": "Create a return/reverse shipment order",
           "request": {
             "method": "POST",
             "header": [
@@ -420,7 +342,59 @@
           "response": []
         },
         {
-          "name": "Schedule Pickup (Optional)",
+          "name": "Get full details of an order",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/get-order-detail/{{order_id}}",
+            "description": "Get Order Detail"
+          },
+          "response": []
+        },
+        {
+          "name": "List failed-delivery (NDR) orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/get-ndr-all?from=%7B%7Bfrom%7D%7D&to=%7B%7Bto%7D%7D&per_page=%7B%7Bper_page%7D%7D&page=%7B%7Bpage%7D%7D",
+            "description": "Get Ndr Orders"
+          },
+          "response": []
+        },
+        {
+          "name": "Schedule a courier pickup",
           "request": {
             "method": "POST",
             "header": [
@@ -458,6 +432,32 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Take action on a failed delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/ndr-action/{{awb_number}}?action=%7B%7Baction%7D%7D",
+            "description": "NDR Action"
+          },
+          "response": []
         }
       ]
     },
@@ -465,7 +465,7 @@
       "name": "Track",
       "item": [
         {
-          "name": "Track Order",
+          "name": "Track a shipment's status",
           "request": {
             "method": "GET",
             "header": [
@@ -496,7 +496,7 @@
       "name": "Utility",
       "item": [
         {
-          "name": "Create Shipper",
+          "name": "Compare courier rates for a shipment",
           "request": {
             "method": "POST",
             "header": [
@@ -521,11 +521,11 @@
                 "type": "text"
               }
             ],
-            "url": "{{baseUrl}}/create-shipper",
-            "description": "create shipper",
+            "url": "{{baseUrl}}/rate-calculator",
+            "description": "Rate Calculator",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Rahul\",\n  \"phone\": \"9876543210\",\n  \"email\": \"test@gmail.com\",\n  \"address_line_one\": \"delhi railway station\",\n  \"address_line_two\": \"new delhi\",\n  \"pin_code\": \"141211\"\n}",
+              "raw": "{\n  \"order_id\": \"\",\n  \"pickup_pincode\": \"122001\",\n  \"delivery_pincode\": \"110001\",\n  \"payment_type\": \"PREPAID\",\n  \"shipment_type\": \"FORWARD\",\n  \"order_amount\": \"1000\",\n  \"type_of_package\": \"SPS\",\n  \"rov_type\": \"ROV_OWNER\",\n  \"cod_amount\": \"\",\n  \"weight\": \"500\",\n  \"dimensions\": [\n    {\n      \"no_of_box\": \"1\",\n      \"length\": \"22\",\n      \"width\": \"10\",\n      \"height\": \"10\"\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -536,59 +536,7 @@
           "response": []
         },
         {
-          "name": "Get Countries",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "public-key",
-                "value": "{{public-key}}",
-                "type": "text"
-              },
-              {
-                "key": "private-key",
-                "value": "{{private-key}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/countries",
-            "description": "Get All Countries"
-          },
-          "response": []
-        },
-        {
-          "name": "Get Return Reason",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "public-key",
-                "value": "{{public-key}}",
-                "type": "text"
-              },
-              {
-                "key": "private-key",
-                "value": "{{private-key}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/get-return-reason",
-            "description": "Get All Return Reason"
-          },
-          "response": []
-        },
-        {
-          "name": "International Rate Calculator",
+          "name": "Compare courier rates for an international shipment",
           "request": {
             "method": "POST",
             "header": [
@@ -628,6 +576,58 @@
           "response": []
         },
         {
+          "name": "Get list of countries (for international shipments)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/countries",
+            "description": "Get All Countries"
+          },
+          "response": []
+        },
+        {
+          "name": "Get valid return reasons",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/get-return-reason",
+            "description": "Get All Return Reason"
+          },
+          "response": []
+        },
+        {
           "name": "Login & obtain API keys",
           "request": {
             "method": "POST",
@@ -658,7 +658,7 @@
           "response": []
         },
         {
-          "name": "Pincode Serviceability",
+          "name": "Register a shipper profile",
           "request": {
             "method": "POST",
             "header": [
@@ -683,51 +683,11 @@
                 "type": "text"
               }
             ],
-            "url": "{{baseUrl}}/pincode-serviceability",
-            "description": "Check whether a pickup-to-delivery pincode lane is serviceable before push-order.",
+            "url": "{{baseUrl}}/create-shipper",
+            "description": "create shipper",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"pickup_pincode\": 122018,\n  \"delivery_pincode\": 122001\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Rate Calculator",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "public-key",
-                "value": "{{public-key}}",
-                "type": "text"
-              },
-              {
-                "key": "private-key",
-                "value": "{{private-key}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/rate-calculator",
-            "description": "Rate Calculator",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"order_id\": \"\",\n  \"pickup_pincode\": \"122001\",\n  \"delivery_pincode\": \"110001\",\n  \"payment_type\": \"PREPAID\",\n  \"shipment_type\": \"FORWARD\",\n  \"order_amount\": \"1000\",\n  \"type_of_package\": \"SPS\",\n  \"rov_type\": \"ROV_OWNER\",\n  \"cod_amount\": \"\",\n  \"weight\": \"500\",\n  \"dimensions\": [\n    {\n      \"no_of_box\": \"1\",\n      \"length\": \"22\",\n      \"width\": \"10\",\n      \"height\": \"10\"\n    }\n  ]\n}",
+              "raw": "{\n  \"name\": \"Rahul\",\n  \"phone\": \"9876543210\",\n  \"email\": \"test@gmail.com\",\n  \"address_line_one\": \"delhi railway station\",\n  \"address_line_two\": \"new delhi\",\n  \"pin_code\": \"141211\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -743,73 +703,7 @@
       "name": "Warehouse",
       "item": [
         {
-          "name": "Create Warehouse",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "public-key",
-                "value": "{{public-key}}",
-                "type": "text"
-              },
-              {
-                "key": "private-key",
-                "value": "{{private-key}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/create-warehouse",
-            "description": "create Warehouse",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"address_title\": \"test123\",\n  \"name\": \"Rahul\",\n  \"phone\": \"9876543210\",\n  \"alternate_phone\": \"9876543210\",\n  \"email\": \"test@gmail.com\",\n  \"address_line_one\": \"delhi railway station\",\n  \"address_line_two\": \"new delhi\",\n  \"pin_code\": \"141211\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get Warehouses",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "public-key",
-                "value": "{{public-key}}",
-                "type": "text"
-              },
-              {
-                "key": "private-key",
-                "value": "{{private-key}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{baseUrl}}/get-warehouses?page=%7B%7Bpage%7D%7D",
-            "description": "Get all Warehouses"
-          },
-          "response": []
-        },
-        {
-          "name": "Order Update Warehouse",
+          "name": "Change an order's linked warehouse",
           "request": {
             "method": "POST",
             "header": [
@@ -839,6 +733,72 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"order_id\": \"test123\",\n  \"warehouse_id\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List your warehouses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/get-warehouses?page=%7B%7Bpage%7D%7D",
+            "description": "Get all Warehouses"
+          },
+          "response": []
+        },
+        {
+          "name": "Register a new warehouse",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/create-warehouse",
+            "description": "create Warehouse",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address_title\": \"test123\",\n  \"name\": \"Rahul\",\n  \"phone\": \"9876543210\",\n  \"alternate_phone\": \"9876543210\",\n  \"email\": \"test@gmail.com\",\n  \"address_line_one\": \"delhi railway station\",\n  \"address_line_two\": \"new delhi\",\n  \"pin_code\": \"141211\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

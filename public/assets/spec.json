@@ -21,7 +21,7 @@
         "tags": [
           "Utility"
         ],
-        "summary": "Get Countries",
+        "summary": "Get list of countries (for international shipments)",
         "description": "Get All Countries",
         "operationId": "Countries",
         "parameters": [
@@ -82,106 +82,12 @@
         }
       }
     },
-    "/pincode-serviceability": {
-      "post": {
-        "tags": [
-          "Utility"
-        ],
-        "summary": "Pincode Serviceability",
-        "description": "Check whether a pickup-to-delivery pincode lane is serviceable before push-order.",
-        "operationId": "pincodeServiceability",
-        "parameters": [
-          {
-            "name": "public-key",
-            "in": "header",
-            "description": "Api Public Key",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "private-key",
-            "in": "header",
-            "description": "Api Private Key",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Pincode Serviceability Required Parameters",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "pickup_pincode": {
-                    "description": "Pickup Pincode",
-                    "type": "number",
-                    "example": 122018
-                  },
-                  "delivery_pincode": {
-                    "description": "Delivery Pincode",
-                    "type": "number",
-                    "example": 122001
-                  }
-                },
-                "type": "object"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "example": {
-                    "result": "1",
-                    "message": "Success",
-                    "data": {
-                      "serviceable": true
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          }
-        },
-        "x-useCases": [
-          "Check lane before push-order at checkout"
-        ],
-        "security": [
-          {
-            "ApiKeyPublic": []
-          },
-          {
-            "ApiKeyPrivate": []
-          }
-        ],
-        "x-rateLimit": {
-          "limit": 500,
-          "remainingHeader": "x-ratelimit-remaining",
-          "limitHeader": "x-ratelimit-limit",
-          "window": "1 minute",
-          "windowSeconds": 60,
-          "windowBehavior": "x-ratelimit-remaining only changes when Shipmozo sends a new HTTP response to you — it does not tick down on its own in the browser. Each API call lowers remaining by 1. After ~60 seconds, the next call you make usually shows remaining closer to 500 again (sliding window, not a live clock on the docs page).",
-          "sharedQuota": true,
-          "notes": ""
-        }
-      }
-    },
     "/get-return-reason": {
       "get": {
         "tags": [
           "Utility"
         ],
-        "summary": "Get Return Reason",
+        "summary": "Get valid return reasons",
         "description": "Get All Return Reason",
         "operationId": "getReturnReason",
         "parameters": [
@@ -240,7 +146,7 @@
         "tags": [
           "Track"
         ],
-        "summary": "Track Order",
+        "summary": "Track a shipment's status",
         "description": "Track Order Shipment Status",
         "operationId": "trackOrder",
         "parameters": [
@@ -308,7 +214,7 @@
         "tags": [
           "Utility"
         ],
-        "summary": "Create Shipper",
+        "summary": "Register a shipper profile",
         "description": "create shipper",
         "operationId": "createShipper",
         "parameters": [
@@ -420,7 +326,7 @@
         "tags": [
           "Label"
         ],
-        "summary": "Get Order Label",
+        "summary": "Download the shipping label",
         "description": "Get Order Label",
         "operationId": "getOrderLabel",
         "parameters": [
@@ -494,7 +400,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Push Order",
+        "summary": "Create a new shipment order",
         "description": "Push Order in Shipmozo",
         "operationId": "pushOrders",
         "parameters": [
@@ -769,7 +675,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "International Push Order",
+        "summary": "Create a new international shipment order",
         "description": "International Push Order in Shipmozo",
         "operationId": "internationalPushOrder",
         "parameters": [
@@ -1098,7 +1004,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Push Return Order",
+        "summary": "Create a return/reverse shipment order",
         "description": "Push Return Order in Shipmozo",
         "operationId": "pushReturnOrder",
         "parameters": [
@@ -1325,7 +1231,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Assign Courier",
+        "summary": "Assign a courier and get the AWB",
         "description": "Assign Courier",
         "operationId": "assignCourier",
         "parameters": [
@@ -1426,7 +1332,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Schedule Pickup (Optional)",
+        "summary": "Schedule a courier pickup",
         "description": "Schedule Pickup",
         "operationId": "schedulePickup",
         "parameters": [
@@ -1524,7 +1430,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Cancel Order",
+        "summary": "Cancel an order",
         "description": "cancel order",
         "operationId": "cancelOrder",
         "parameters": [
@@ -1624,7 +1530,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Auto Assign Order",
+        "summary": "Auto-assign a courier (per panel settings)",
         "description": "Auto Assign Order",
         "operationId": "autoCourierAssign",
         "parameters": [
@@ -1722,7 +1628,7 @@
         "tags": [
           "Label"
         ],
-        "summary": "Generate Manifest",
+        "summary": "Generate a pickup manifest",
         "description": "Generate Manifest",
         "operationId": "generateManifest",
         "parameters": [
@@ -1797,7 +1703,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Get NDR Orders",
+        "summary": "List failed-delivery (NDR) orders",
         "description": "Get Ndr Orders",
         "operationId": "getAllNdrShipments",
         "parameters": [
@@ -1899,7 +1805,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "NDR Action",
+        "summary": "Take action on a failed delivery",
         "description": "NDR Action",
         "operationId": "ndrOrderAction",
         "parameters": [
@@ -1973,7 +1879,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Get Order Detail",
+        "summary": "Get full details of an order",
         "description": "Get Order Detail",
         "operationId": "getOrderDetail",
         "parameters": [
@@ -2048,7 +1954,7 @@
         "tags": [
           "Utility"
         ],
-        "summary": "Rate Calculator",
+        "summary": "Compare courier rates for a shipment",
         "description": "Rate Calculator",
         "operationId": "rateCalculator",
         "parameters": [
@@ -2196,7 +2102,7 @@
         "tags": [
           "Utility"
         ],
-        "summary": "International Rate Calculator",
+        "summary": "Compare courier rates for an international shipment",
         "description": "Internatinal Rate Calculator",
         "operationId": "internationalRateCalculator",
         "parameters": [
@@ -2414,7 +2320,7 @@
         "tags": [
           "Warehouse"
         ],
-        "summary": "Get Warehouses",
+        "summary": "List your warehouses",
         "description": "Get all Warehouses",
         "operationId": "getWarehouses",
         "parameters": [
@@ -2479,7 +2385,7 @@
         "tags": [
           "Warehouse"
         ],
-        "summary": "Create Warehouse",
+        "summary": "Register a new warehouse",
         "description": "create Warehouse",
         "operationId": "createWarehouse",
         "parameters": [
@@ -2601,7 +2507,7 @@
         "tags": [
           "Warehouse"
         ],
-        "summary": "Order Update Warehouse",
+        "summary": "Change an order's linked warehouse",
         "description": "Order Update Warehouse",
         "operationId": "orderUpdateWarehouse",
         "parameters": [
@@ -2694,7 +2600,7 @@
         "tags": [
           "Common"
         ],
-        "summary": "API Health / Version",
+        "summary": "Check API health / version",
         "description": "Get Api Version Detail",
         "operationId": "getApiInfo",
         "responses": {
@@ -2882,7 +2788,7 @@
           "meaning": "Requests left in the current window — decreases by 1 on each API call you make. You only see a new number on the next HTTP response (the page does not auto-update). After ~60s without traffic, the next call usually shows remaining closer to 500 again (sliding window)."
         }
       ],
-      "note": "498 in tutorials means '2 calls used this minute' — not a fixed cap. Use the portal 'Check live rate limit' or Execute API to read current headers."
+      "note": "498 in tutorials means '2 calls used this minute' — not a fixed cap. Use Overview → Check now to read current headers."
     },
     "errorCodes": [
       {
@@ -3106,15 +3012,6 @@
           "keywords": [
             "create order",
             "forward order"
-          ]
-        },
-        "pincodeServiceability": {
-          "category": "domestic-shipments",
-          "order": 15,
-          "keywords": [
-            "pincode",
-            "serviceability",
-            "lane"
           ]
         },
         "rateCalculator": {
@@ -3526,15 +3423,6 @@
         "auth": false,
         "limit": 500,
         "notes": "Cache keys after success; do not poll login"
-      },
-      {
-        "operationId": "pincodeServiceability",
-        "method": "POST",
-        "path": "/pincode-serviceability",
-        "tag": "Utility",
-        "auth": true,
-        "limit": 500,
-        "notes": ""
       },
       {
         "operationId": "rateCalculator",

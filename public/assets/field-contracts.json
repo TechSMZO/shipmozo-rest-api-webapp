@@ -75,6 +75,7 @@
   },
   "rateCalculator": {
     "title": "Rate Calculator",
+    "tip": "Tip: to check if a pincode pair is serviceable, call this endpoint — one or more couriers returned means the route is serviceable. An empty list or result \"0\" means the pincodes are not serviceable.",
     "fields": [
       { "field": "order_id", "type": "string", "required": false, "values": "—", "notes": "Only if calculating for an existing order" },
       { "field": "pickup_pincode", "type": "number", "required": true, "values": "—", "notes": "" },
@@ -129,13 +130,6 @@
     "title": "Get Order Detail",
     "fields": [
       { "field": "order_id", "type": "string", "required": true, "values": "query param", "notes": "" }
-    ]
-  },
-  "pincodeServiceability": {
-    "title": "Pincode Serviceability",
-    "fields": [
-      { "field": "pickup_pincode", "type": "number", "required": true, "values": "—", "notes": "" },
-      { "field": "delivery_pincode", "type": "number", "required": true, "values": "—", "notes": "" }
     ]
   },
   "internationalPushOrder": {

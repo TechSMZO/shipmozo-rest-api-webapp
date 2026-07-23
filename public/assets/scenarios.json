@@ -50,7 +50,7 @@
         "dimensions": [{ "no_of_box": "1", "length": "22", "width": "10", "height": "10" }]
       },
       "params": { "delivery_pincode": "000000" },
-      "expected": "result 0 or empty courier list"
+      "expected": "empty courier list — this means the pincodes are not serviceable."
     }
   ],
   "post-/push-order": [
