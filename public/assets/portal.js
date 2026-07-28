@@ -24,24 +24,56 @@ const POSTMAN_ASSETS = {
   environment: "/assets/shipmozo.postman_environment.live.json",
 };
 
-/** Silent internal path: /dev uses the Dev API host. Public UI never mentions this. */
+/** Silent internal path: /dev uses the Dev API host. No Dig/Live switch in the UI. */
 function isDevPortalPath() {
   const p = (location.pathname || "/").replace(/\/+$/, "") || "/";
   return p === "/dev" || p.startsWith("/dev/");
 }
 
-const PORTAL_PREFIX = isDevPortalPath() ? "/dev" : "";
-const SPEC_URLS = [`${PORTAL_PREFIX}/assets/spec.json`, `${PORTAL_PREFIX}/api/spec.json`, "/assets/spec.json", "/api/spec.json"];
+function getPortalPrefix() {
+  return isDevPortalPath() ? "/dev" : "";
+}
+
+function getSpecUrls() {
+  const prefix = getPortalPrefix();
+  return [`${prefix}/assets/spec.json`, `${prefix}/api/spec.json`, "/assets/spec.json", "/api/spec.json"];
+}
 
 function portalUrl(path) {
   if (!path.startsWith("/")) path = `/${path}`;
-  return `${PORTAL_PREFIX}${path}`;
+  return `${getPortalPrefix()}${path}`;
+}
+
+/** Mistaken hash Dig URL (/#/dev) → real pathname Dig portal (/dev/#/). */
+function redirectMistakenDevHash() {
+  if (isDevPortalPath()) return false;
+  const raw = location.hash || "";
+  const pathPart = raw.split("?")[0];
+  if (pathPart !== "#/dev" && !pathPart.startsWith("#/dev/")) return false;
+  const rest = pathPart === "#/dev" ? "#/" : `#/${pathPart.slice("#/dev/".length)}`;
+  const qs = raw.includes("?") ? `?${raw.split("?")[1]}` : "";
+  location.replace(`/dev/${rest}${qs}`);
+  return true;
 }
 
 function currentPostmanEnvAsset() {
   return isDevPortalPath()
     ? "/assets/shipmozo.postman_environment.dev.json"
     : POSTMAN_ASSETS.environment;
+}
+
+/** Active-env badge / toast label (Dig shows Dev connected). */
+function getConnectedLabel(pending = false) {
+  if (isDevPortalPath()) return pending ? "Dev connected · Pending" : "Dev connected";
+  return pending ? "Connected · Pending" : "Connected";
+}
+
+/** Sync path-derived Dig/live mode and active credential slot. */
+function applyPortalMode() {
+  backendEnv = isDevPortalPath() ? "dev" : "live";
+  applyActiveCredentials();
+  syncAuthUI();
+  syncJourneyFromAuth();
 }
 
 function currentPostmanEnvDownloadName() {
@@ -409,14 +441,15 @@ function syncAuthUI(accountHint) {
     status.textContent = "Keys rejected";
     status.classList.add("rejected");
     status.title = "These keys are not valid. Sign in again or paste keys from Panel → Profile.";
+    setJourney({ connected: false });
   } else if (connected) {
     setJourney({ connected: true });
     if (accountHint === "pending") {
-      status.textContent = "Connected · Pending";
+      status.textContent = getConnectedLabel(true);
       status.classList.add("pending");
       status.title = "Keys work, but Shipmozo profile is under verification";
     } else {
-      status.textContent = "Connected";
+      status.textContent = getConnectedLabel(false);
       status.classList.add("connected");
       status.title =
         accountHint === "verified"
@@ -427,12 +460,15 @@ function syncAuthUI(accountHint) {
     status.textContent = "Keys saved, not connected";
     status.classList.add("saved");
     status.title = "Keys are saved. Click Connect to use them.";
+    setJourney({ connected: false });
   } else if (stored.publicKey || stored.privateKey) {
     status.textContent = "Incomplete keys";
     status.title = "Enter both public-key and private-key";
+    setJourney({ connected: false });
   } else {
     status.textContent = "Not connected";
     status.title = "Click Connect API";
+    setJourney({ connected: false });
   }
   syncAuthActionButtons();
 }
@@ -615,7 +651,7 @@ function matchesWorkflowSearch(item, query) {
 
 async function loadSpec() {
   let lastError;
-  for (const url of SPEC_URLS) {
+  for (const url of getSpecUrls()) {
     try {
       const { data } = await fetchJson(url);
       if (!data?.paths) throw new Error("Spec missing paths");
@@ -1364,7 +1400,7 @@ function setJourney(patch) {
 }
 
 function syncJourneyFromAuth() {
-  if (isEnvConnected(backendEnv)) setJourney({ connected: true });
+  setJourney({ connected: isEnvConnected(backendEnv) });
 }
 
 function updateJourneyFromCall(item, payload) {
@@ -1595,7 +1631,7 @@ function bindTester(preselectId) {
         const payload = wrapped.data;
         updateJourneyFromCall(item, payload);
         if (isLoginOperation(item) && applyLoginKeysFromPayload(payload)) {
-          toast("Connected", "ok");
+          toast(getConnectedLabel(false), "ok");
         }
         const strip = document.querySelector(".journey-strip");
         if (strip) strip.outerHTML = renderJourneyStrip();
@@ -2137,7 +2173,7 @@ function bindPhase1Tester(preselectId) {
       renderResponse(wrapped.data, wrapped, durationMs);
       updateJourneyFromCall(item, wrapped.data);
       if (isLoginOperation(item) && applyLoginKeysFromPayload(wrapped.data)) {
-        toast("Connected", "ok");
+        toast(getConnectedLabel(false), "ok");
       }
       const strip = document.querySelector(".journey-strip");
       if (strip) strip.outerHTML = renderJourneyStrip();
@@ -2358,8 +2394,8 @@ function bindAuthDialog() {
       await loginWithPassword(u, p);
       setJourney({ connected: true });
       msg.className = "auth-login-msg ok";
-      msg.textContent = `Connected. You can close this dialog.`;
-      toast("Connected", "ok");
+      msg.textContent = `${getConnectedLabel(false)}. You can close this dialog.`;
+      toast(getConnectedLabel(false), "ok");
       closeAuthDialog();
     } catch (e) {
       msg.className = "auth-login-msg error";
@@ -2396,16 +2432,16 @@ function bindAuthDialog() {
       msg.className = "auth-login-msg error";
       msg.textContent =
         "Keys are saved and valid, but your Shipmozo profile is still under verification. Complete KYC in the panel — APIs will return result 0 until approved.";
-      toast("Connected — account pending", "error");
+      toast(getConnectedLabel(true), "error");
     } else if (accountState === "verified") {
       msg.className = "auth-login-msg ok";
-      msg.textContent = `Connected. Account is active.`;
-      toast("Connected", "ok");
+      msg.textContent = `${getConnectedLabel(false)}. Account is active.`;
+      toast(getConnectedLabel(false), "ok");
       closeAuthDialog();
     } else {
       msg.className = "auth-login-msg ok";
-      msg.textContent = `Connected. Keys saved locally.`;
-      toast("Connected", "ok");
+      msg.textContent = `${getConnectedLabel(false)}. Keys saved locally.`;
+      toast(getConnectedLabel(false), "ok");
       closeAuthDialog();
     }
   });
@@ -2435,11 +2471,11 @@ function bindAuthDialog() {
         msg.className = "auth-login-msg error";
         msg.textContent =
           "Connected with saved keys, but your Shipmozo profile is still under verification.";
-        toast("Connected — account pending", "error");
+        toast(getConnectedLabel(true), "error");
       } else {
         msg.className = "auth-login-msg ok";
-        msg.textContent = `Connected.`;
-        toast("Connected", "ok");
+        msg.textContent = `${getConnectedLabel(false)}.`;
+        toast(getConnectedLabel(false), "ok");
         closeAuthDialog();
       }
       return;
@@ -2538,8 +2574,10 @@ function bindSidebarToggle() {
 }
 
 async function init() {
-  backendEnv = isDevPortalPath() ? "dev" : "live";
+  if (redirectMistakenDevHash()) return;
+  applyPortalMode();
   loadCredentials();
+  applyPortalMode();
   bindAuthDialog();
   bindSidebarToggle();
   refreshAuthStatusFromKeys();
