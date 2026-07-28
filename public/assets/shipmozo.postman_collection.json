@@ -2,13 +2,13 @@
   "info": {
     "_postman_id": "shipmozo-api-collection",
     "name": "Shipmozo Shipping API",
-    "description": "Shipmozo REST API — orders, couriers, tracking, warehouses, NDR, and labels.\n\n1. Import a **Shipmozo Dev** or **Shipmozo Live** environment (or set `baseUrl` yourself).\n2. Set `public-key` and `private-key` from Panel → Profile.\n3. Send requests — check `result` (`1` = success, `0` = failure).\n\nGenerated from the developer portal OpenAPI spec.",
+    "description": "Shipmozo REST API — orders, couriers, tracking, warehouses, NDR, and labels.\n\n1. Import the **Shipmozo** environment (or set `baseUrl` yourself).\n2. Set `public-key` and `private-key` from Panel → Profile.\n3. Send requests — check `result` (`1` = success, `0` = failure).\n\nGenerated from the developer portal OpenAPI spec.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "https://appiify.com/app/api/v1"
+      "value": "https://shipping-api.com/app/api/v1"
     },
     {
       "key": "public-key",

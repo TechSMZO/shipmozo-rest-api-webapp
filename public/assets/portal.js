@@ -12,35 +12,47 @@ import { loadFieldContracts, renderFieldContract } from "./field-contract-render
 import { renderDemoPage, bindDemoPage } from "./demo-player.js?v=34";
 
 const API_BACKENDS = {
-  dev: { label: "Dev server", baseUrl: "https://appiify.com/app/api/v1" },
-  live: { label: "Live server", baseUrl: "https://shipping-api.com/app/api/v1" },
+  dev: { label: "Shipmozo API", baseUrl: "https://appiify.com/app/api/v1" },
+  live: { label: "Shipmozo API", baseUrl: "https://shipping-api.com/app/api/v1" },
 };
 const AUTH_STORAGE = "shipmozo_api_keys";
 const AUTH_CONNECTED_STORAGE = "shipmozo_api_connected";
-const BACKEND_STORAGE = "shipmozo_api_backend";
 const SIDEBAR_STORAGE = "shipmozo_sidebar_collapsed";
 /** Static file works even when a generic static server is used; /api/spec.json needs node server.js */
 const POSTMAN_ASSETS = {
   collection: "/assets/shipmozo.postman_collection.json",
-  envDev: "/assets/shipmozo.postman_environment.dev.json",
-  envLive: "/assets/shipmozo.postman_environment.live.json",
+  environment: "/assets/shipmozo.postman_environment.live.json",
 };
-const SPEC_URLS = ["/assets/spec.json", "/api/spec.json"];
+
+/** Silent internal path: /dev uses the Dev API host. Public UI never mentions this. */
+function isDevPortalPath() {
+  const p = (location.pathname || "/").replace(/\/+$/, "") || "/";
+  return p === "/dev" || p.startsWith("/dev/");
+}
+
+const PORTAL_PREFIX = isDevPortalPath() ? "/dev" : "";
+const SPEC_URLS = [`${PORTAL_PREFIX}/assets/spec.json`, `${PORTAL_PREFIX}/api/spec.json`, "/assets/spec.json", "/api/spec.json"];
+
+function portalUrl(path) {
+  if (!path.startsWith("/")) path = `/${path}`;
+  return `${PORTAL_PREFIX}${path}`;
+}
 
 function currentPostmanEnvAsset() {
-  return backendEnv === "live" ? POSTMAN_ASSETS.envLive : POSTMAN_ASSETS.envDev;
+  return isDevPortalPath()
+    ? "/assets/shipmozo.postman_environment.dev.json"
+    : POSTMAN_ASSETS.environment;
 }
 
 function currentPostmanEnvDownloadName() {
-  return backendEnv === "live" ? "shipmozo-live.postman_environment.json" : "shipmozo-dev.postman_environment.json";
+  return "shipmozo.postman_environment.json";
 }
 
 function renderPostmanActions(compact = false) {
-  const envLabel = getBackendLabel();
   if (compact) {
     return `
       <a href="${esc(POSTMAN_ASSETS.collection)}" download="shipmozo.postman_collection.json" class="btn-secondary postman-btn">Postman collection</a>
-      <a href="${esc(currentPostmanEnvAsset())}" download="${esc(currentPostmanEnvDownloadName())}" class="btn-secondary postman-btn" title="Download ${esc(envLabel)} environment">Postman environment</a>`;
+      <a href="${esc(currentPostmanEnvAsset())}" download="${esc(currentPostmanEnvDownloadName())}" class="btn-secondary postman-btn" title="Download Postman environment">Postman environment</a>`;
   }
   return `
     <div class="section postman-section">
@@ -48,10 +60,10 @@ function renderPostmanActions(compact = false) {
       <p class="page-lead">Download the Shipmozo API collection and environment, then import in Postman: <strong>Import → Upload Files</strong>.</p>
       <div class="hero-actions postman-actions">
         <a href="${esc(POSTMAN_ASSETS.collection)}" download="shipmozo.postman_collection.json" class="btn-primary postman-btn">Download collection</a>
-        <a href="${esc(currentPostmanEnvAsset())}" download="${esc(currentPostmanEnvDownloadName())}" class="btn-secondary">Download ${esc(envLabel)} environment</a>
+        <a href="${esc(currentPostmanEnvAsset())}" download="${esc(currentPostmanEnvDownloadName())}" class="btn-secondary">Download environment</a>
       </div>
       <div class="note" style="margin-top:12px">
-        <strong>Setup:</strong> Import both files in Postman, select the <strong>${esc(envLabel)}</strong> environment, set <code>public-key</code> and <code>private-key</code>, then send requests.
+        <strong>Setup:</strong> Import both files in Postman, select the Shipmozo environment, set <code>public-key</code> and <code>private-key</code>, then send requests.
       </div>
     </div>`;
 }
@@ -68,19 +80,20 @@ let credentialsByEnv = {
 };
 /** Per-env: true = use saved keys on requests; false = keys may exist but do not send until Connect. */
 let connectedByEnv = { dev: false, live: false };
-let credentials = credentialsByEnv.dev;
-let backendEnv = "dev";
+/** Path-derived only — / is live, /dev is silent Dev API. No UI switch. */
+let backendEnv = isDevPortalPath() ? "dev" : "live";
+let credentials = credentialsByEnv[backendEnv];
 
 function getApiBase() {
-  return API_BACKENDS[backendEnv]?.baseUrl || API_BACKENDS.dev.baseUrl;
+  return API_BACKENDS[backendEnv]?.baseUrl || API_BACKENDS.live.baseUrl;
 }
 
 function getBackendLabel() {
-  return API_BACKENDS[backendEnv]?.label || "Dev server";
+  return "Shipmozo API";
 }
 
-function getEnvShortLabel(env = backendEnv) {
-  return env === "live" ? "Live" : "Dev";
+function getEnvShortLabel(_env = backendEnv) {
+  return "";
 }
 
 function hasKeysFor(env = backendEnv) {
@@ -129,10 +142,7 @@ function loadConnectedFlags() {
 }
 
 function renderSandboxWarningNote() {
-  if (backendEnv === "live") {
-    return `<div class="note warn"><strong>Live API:</strong> Requests hit production (<code>shipping-api.com</code>). Orders and AWBs are real. <strong>Dev keys do not authorize on Live</strong> — sign in (or paste Live panel keys) while Live is selected.</div>`;
-  }
-  return `<div class="note warn"><strong>Dev sandbox:</strong> Dev requests run against a live sandbox. Pushing an order creates a real order and AWB on your account — cancel test orders when you're done. <strong>Live keys do not authorize on Dev</strong> — each server has its own key pair.</div>`;
+  return `<div class="note warn"><strong>Real API:</strong> Requests hit <code>${esc(getApiBase())}</code>. Pushing an order creates a real order and AWB on your account — cancel test orders when you are done.</div>`;
 }
 
 function sameKeyPair(a, b) {
@@ -146,11 +156,12 @@ function sameKeyPair(a, b) {
   );
 }
 
-/** Legacy storage copied one key pair into both slots; Live rejects Dev keys. */
+/** Legacy storage may have mirrored one key pair into both slots — keep the active path's keys. */
 function scrubMirroredLiveKeys() {
   if (!sameKeyPair(credentialsByEnv.dev, credentialsByEnv.live)) return false;
-  credentialsByEnv.live = { publicKey: "", privateKey: "" };
-  connectedByEnv.live = false;
+  const other = backendEnv === "live" ? "dev" : "live";
+  credentialsByEnv[other] = { publicKey: "", privateKey: "" };
+  connectedByEnv[other] = false;
   try {
     localStorage.setItem(AUTH_STORAGE, JSON.stringify(credentialsByEnv));
   } catch {
@@ -158,51 +169,6 @@ function scrubMirroredLiveKeys() {
   }
   persistConnectedFlags();
   return true;
-}
-
-function loadBackend() {
-  try {
-    const saved = localStorage.getItem(BACKEND_STORAGE);
-    if (saved === "live" || saved === "dev") backendEnv = saved;
-  } catch {
-    /* ignore */
-  }
-}
-
-function saveBackend(env) {
-  if (env !== "live" && env !== "dev") return;
-  persistCredentialsToStore();
-  backendEnv = env;
-  localStorage.setItem(BACKEND_STORAGE, env);
-  applyActiveCredentials();
-  syncBackendUI();
-  syncAuthUI();
-  refreshAuthStatusFromKeys();
-  $("#authUsername") && ($("#authUsername").value = "");
-  $("#authPassword") && ($("#authPassword").value = "");
-  $("#authLoginMsg") && ($("#authLoginMsg").textContent = "");
-}
-
-function syncBackendUI() {
-  const sel = $("#backendEnv");
-  if (sel) sel.value = backendEnv;
-  const hint = $("#authBackendHint");
-  if (hint) hint.textContent = getBackendLabel();
-}
-
-function bindBackendSwitch() {
-  $("#backendEnv")?.addEventListener("change", (e) => {
-    saveBackend(e.target.value);
-    const env = getEnvShortLabel();
-    if (isEnvConnected(backendEnv)) {
-      toast(`Connected as ${env} — ${getApiBase()}`, "ok");
-    } else if (hasKeysFor(backendEnv)) {
-      toast(`${env} selected — keys saved, not connected`, "info");
-    } else {
-      toast(`Using ${getBackendLabel()} — connect keys to call the API`, "info");
-    }
-    route();
-  });
 }
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -246,10 +212,10 @@ function getActiveCredentials() {
 }
 
 async function proxyRequest({ method, path, headers = {}, body }) {
-  const { res, data } = await fetchJson("/api/proxy", {
+  const { res, data } = await fetchJson(portalUrl("/api/proxy"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ method, path, headers, body, backend: backendEnv }),
+    body: JSON.stringify({ method, path, headers, body }),
   });
   if (!res.ok && data.error && !data.data) {
     throw new Error(data.message || data.error);
@@ -273,7 +239,7 @@ function renderLiveRateLimitBox() {
   return `
     <div class="rate-live card" id="rateLiveBox">
       <div class="rate-live-head">
-        <h3>Live rate limit</h3>
+        <h3>Rate limit</h3>
         <button type="button" class="btn-secondary btn-sm" id="rateLiveBtn">Check now</button>
       </div>
       <p class="muted small">Makes one real API call and reads <code>x-ratelimit-*</code> headers. The number does <strong>not</strong> update until you click again.</p>
@@ -350,12 +316,12 @@ function loadCredentials() {
         if (parsed.dev) credentialsByEnv.dev = { ...credentialsByEnv.dev, ...parsed.dev };
         if (parsed.live) credentialsByEnv.live = { ...credentialsByEnv.live, ...parsed.live };
       } else if (parsed.publicKey !== undefined || parsed.privateKey !== undefined) {
-        // Flat legacy blob was Dev-only; never mirror into Live (keys are not interchangeable).
-        credentialsByEnv.dev = {
+        // Flat legacy blob — keep under the silent /dev slot; public / uses live.
+        credentialsByEnv.live = {
           publicKey: parsed.publicKey || "",
           privateKey: parsed.privateKey || "",
         };
-        credentialsByEnv.live = { publicKey: "", privateKey: "" };
+        credentialsByEnv.dev = { publicKey: "", privateKey: "" };
       }
       if (migratedFromSession || (!parsed.dev && !parsed.live && (parsed.publicKey || parsed.privateKey))) {
         try {
@@ -407,7 +373,7 @@ function syncAuthActionButtons() {
   if (connected) {
     clearBtn.hidden = false;
     clearBtn.disabled = false;
-    clearBtn.textContent = "Disconnect this server";
+    clearBtn.textContent = "Disconnect";
     clearBtn.dataset.authAction = "disconnect";
   } else if (keys) {
     clearBtn.hidden = false;
@@ -417,7 +383,7 @@ function syncAuthActionButtons() {
   } else {
     clearBtn.hidden = true;
     clearBtn.disabled = true;
-    clearBtn.textContent = "Disconnect this server";
+    clearBtn.textContent = "Disconnect";
     clearBtn.dataset.authAction = "";
   }
 }
@@ -431,7 +397,6 @@ function syncAuthUI(accountHint) {
   if (priv) priv.value = stored.privateKey || "";
   if (status) status.classList.remove("connected", "pending", "saved", "rejected");
 
-  const envTag = getEnvShortLabel();
   const connected = isEnvConnected(backendEnv);
   const keys = hasKeysFor(backendEnv);
 
@@ -441,17 +406,17 @@ function syncAuthUI(accountHint) {
   }
 
   if (accountHint === "unauthorized") {
-    status.textContent = `${envTag} — keys rejected`;
+    status.textContent = "Keys rejected";
     status.classList.add("rejected");
-    status.title = "These keys are not valid for this API server. Sign in while this server is selected.";
+    status.title = "These keys are not valid. Sign in again or paste keys from Panel → Profile.";
   } else if (connected) {
     setJourney({ connected: true });
     if (accountHint === "pending") {
-      status.textContent = `Connected as ${envTag} · Pending`;
+      status.textContent = "Connected · Pending";
       status.classList.add("pending");
       status.title = "Keys work, but Shipmozo profile is under verification";
     } else {
-      status.textContent = `Connected as ${envTag}`;
+      status.textContent = "Connected";
       status.classList.add("connected");
       status.title =
         accountHint === "verified"
@@ -459,11 +424,11 @@ function syncAuthUI(accountHint) {
           : `public-key: ${(stored.publicKey || "").slice(0, 10)}…`;
     }
   } else if (keys) {
-    status.textContent = `${envTag} — keys saved, not connected`;
+    status.textContent = "Keys saved, not connected";
     status.classList.add("saved");
-    status.title = "Keys are saved for this server. Click Connect to use them.";
+    status.title = "Keys are saved. Click Connect to use them.";
   } else if (stored.publicKey || stored.privateKey) {
-    status.textContent = `${envTag} — incomplete keys`;
+    status.textContent = "Incomplete keys";
     status.title = "Enter both public-key and private-key";
   } else {
     status.textContent = "Not connected";
@@ -497,7 +462,7 @@ function interpretShipmozoResponse(payload) {
     return {
       type: "unauthorized",
       title: "❌ Failed: Keys not valid for this server",
-      text: "Dev and Live use different API key pairs. Sign in (or paste keys) while the matching API server is selected — Dev keys on Live return unauthorised.",
+      text: "Shipmozo rejected these API keys. Sign in again or paste fresh keys from Panel → Profile.",
     };
   }
   if (msg.includes("invalid") && (msg.includes("key") || msg.includes("credential"))) {
@@ -528,13 +493,10 @@ async function refreshAuthStatusFromKeys() {
   }
   const accountState = await probeAccountStatus();
   if (accountState === "unauthorized") {
-    // Stay disconnected so the badge cannot claim Connected while Live rejects Dev-copied keys.
+    // Stay disconnected so the badge cannot claim Connected while keys are rejected.
     setEnvConnected(backendEnv, false);
     syncAuthUI("unauthorized");
-    toast(
-      `${getEnvShortLabel()} rejected these keys — sign in while ${getEnvShortLabel()} is selected`,
-      "error"
-    );
+    toast("These keys were rejected — sign in again or paste keys from Panel → Profile", "error");
     return;
   }
   syncAuthUI(accountHintFromProbe(accountState));
@@ -560,6 +522,32 @@ async function probeAccountStatus() {
   }
 }
 
+function extractLoginKeys(payload) {
+  if (!payload || (payload.result !== "1" && payload.result !== 1)) return null;
+  const row = Array.isArray(payload.data) ? payload.data[0] : payload.data;
+  if (!row || typeof row !== "object") return null;
+  const publicKey = row.public_key || row.publicKey || "";
+  const privateKey = row.private_key || row.privateKey || "";
+  if (!publicKey || !privateKey) return null;
+  return { publicKey, privateKey, row };
+}
+
+function applyLoginKeysFromPayload(payload) {
+  const extracted = extractLoginKeys(payload);
+  if (!extracted) return false;
+  credentials.publicKey = extracted.publicKey;
+  credentials.privateKey = extracted.privateKey;
+  saveCredentials();
+  setJourney({ connected: true });
+  return true;
+}
+
+function isLoginOperation(item) {
+  if (!item) return false;
+  const pathOnly = String(item.path || "").split("?")[0];
+  return pathOnly === "/login" || item.op?.operationId === "Login";
+}
+
 async function loginWithPassword(username, password) {
   const wrapped = await proxyRequest({
     method: "POST",
@@ -568,13 +556,10 @@ async function loginWithPassword(username, password) {
     body: { username, password },
   });
   const payload = wrapped.data;
-  if (payload?.result !== "1" || !Array.isArray(payload.data) || !payload.data[0]) {
+  if (!applyLoginKeysFromPayload(payload)) {
     throw new Error(payload?.message || wrapped.message || "Login failed");
   }
-  credentials.publicKey = payload.data[0].public_key || "";
-  credentials.privateKey = payload.data[0].private_key || "";
-  saveCredentials();
-  return payload.data[0];
+  return extractLoginKeys(payload)?.row || payload.data?.[0];
 }
 
 function authHeaders() {
@@ -904,7 +889,7 @@ function renderStaticIntro() {
         <img src="/assets/shipmozo-logo.png" alt="Shipmozo" class="hero-logo" width="160" height="52" />
       </div>
       <h2>Developer portal</h2>
-      <p>Integrate orders, couriers, tracking, warehouses, and returns. Connect your API keys and test live from the browser.</p>
+      <p>Integrate orders, couriers, tracking, warehouses, and returns. Connect your API keys and test from the browser.</p>
       <div class="hero-actions">
         <button type="button" class="btn-primary" id="heroConnectBtn">${connected ? "Manage API keys" : "Connect API keys"}</button>
         <a href="#/execute" class="btn-secondary">Open API Tester</a>
@@ -931,15 +916,13 @@ function renderStaticIntro() {
     <div class="section">
       <h2>Base URL</h2>
       <div class="url-box card">
-        <label>${esc(getBackendLabel())}</label>
+        <label>API base URL</label>
         <code>${getApiBase()}</code>
       </div>
       <p class="base-url-note">
-        <strong>Dev</strong> (<code>appiify.com</code>) is the staging host used by this portal when Dev is selected.
-        <strong>Live</strong> (<code>shipping-api.com</code>) is the production API documented for go-live.
-        Switch servers in the header — API Tester and code samples follow the selection. Keys are stored separately per environment.
+        All portal requests and code samples use <code>${esc(getApiBase())}</code>.
+        Do not add a trailing slash after <code>/v1</code>.
       </p>
-      <p class="muted small">Switch between <strong>Dev</strong> and <strong>Live</strong> in the header. API Tester and code samples use the selected server.</p>
       <div class="note warn"><strong>No trailing slash.</strong> Using <code>.../v1/</code> can cause CORS failures in browsers.</div>
     </div>
 
@@ -1187,7 +1170,7 @@ function renderEndpoint(item) {
       </div>
 
       <div class="url-box card" style="margin:16px 0">
-        <label>${esc(getBackendLabel())} URL</label>
+        <label>API URL</label>
         <code>${esc(fullUrl)}</code>
       </div>
 
@@ -1357,6 +1340,8 @@ function workflowApiDeps() {
     getActiveCredentials,
     interpretShipmozoResponse,
     toast,
+    applyLoginKeysFromPayload,
+    isLoginOperation,
   };
 }
 
@@ -1445,7 +1430,7 @@ function renderTester(preselectId) {
   return `
     <div class="tester-layout">
       <h1 class="page-title">API Tester</h1>
-      <p class="page-lead">Live requests go through this portal's proxy to <code>${getApiBase()}</code>&nbsp;(<strong>${esc(getBackendLabel())}</strong>). Connect API keys in the header — they are sent as <code>public-key</code> and <code>private-key</code> on every call.</p>
+      <p class="page-lead">Requests go through this portal's proxy to <code>${getApiBase()}</code>. Connect API keys in the header — they are sent as <code>public-key</code> and <code>private-key</code> on every call.</p>
       ${renderJourneyStrip()}
 
       <div class="tester-grid">
@@ -1609,6 +1594,9 @@ function bindTester(preselectId) {
       } else {
         const payload = wrapped.data;
         updateJourneyFromCall(item, payload);
+        if (isLoginOperation(item) && applyLoginKeysFromPayload(payload)) {
+          toast("Connected", "ok");
+        }
         const strip = document.querySelector(".journey-strip");
         if (strip) strip.outerHTML = renderJourneyStrip();
         const interpretation = interpretShipmozoResponse(payload);
@@ -2148,6 +2136,9 @@ function bindPhase1Tester(preselectId) {
       $("#testerMeta").textContent = `${item.method} ${path} · ${Math.round(durationMs)} ms`;
       renderResponse(wrapped.data, wrapped, durationMs);
       updateJourneyFromCall(item, wrapped.data);
+      if (isLoginOperation(item) && applyLoginKeysFromPayload(wrapped.data)) {
+        toast("Connected", "ok");
+      }
       const strip = document.querySelector(".journey-strip");
       if (strip) strip.outerHTML = renderJourneyStrip();
     } catch (error) {
@@ -2367,8 +2358,8 @@ function bindAuthDialog() {
       await loginWithPassword(u, p);
       setJourney({ connected: true });
       msg.className = "auth-login-msg ok";
-      msg.textContent = `Connected as ${getEnvShortLabel()}. You can close this dialog.`;
-      toast(`Connected as ${getEnvShortLabel()}`, "ok");
+      msg.textContent = `Connected. You can close this dialog.`;
+      toast("Connected", "ok");
       closeAuthDialog();
     } catch (e) {
       msg.className = "auth-login-msg error";
@@ -2395,8 +2386,8 @@ function bindAuthDialog() {
       setEnvConnected(backendEnv, false);
       syncAuthUI("unauthorized");
       msg.className = "auth-login-msg error";
-      msg.textContent = `${getEnvShortLabel()} rejected these keys. Dev and Live use different key pairs — sign in while ${getEnvShortLabel()} is selected (same username/password is fine).`;
-      toast(`${getEnvShortLabel()} rejected these keys`, "error");
+      msg.textContent = `These keys were rejected. Sign in again or paste keys from Panel → Profile.`;
+      toast("These keys were rejected", "error");
       return;
     }
     setJourney({ connected: true });
@@ -2405,16 +2396,16 @@ function bindAuthDialog() {
       msg.className = "auth-login-msg error";
       msg.textContent =
         "Keys are saved and valid, but your Shipmozo profile is still under verification. Complete KYC in the panel — APIs will return result 0 until approved.";
-      toast(`Connected as ${getEnvShortLabel()} — account pending`, "error");
+      toast("Connected — account pending", "error");
     } else if (accountState === "verified") {
       msg.className = "auth-login-msg ok";
-      msg.textContent = `Connected as ${getEnvShortLabel()}. Account is active.`;
-      toast(`Connected as ${getEnvShortLabel()}`, "ok");
+      msg.textContent = `Connected. Account is active.`;
+      toast("Connected", "ok");
       closeAuthDialog();
     } else {
       msg.className = "auth-login-msg ok";
-      msg.textContent = `Connected as ${getEnvShortLabel()}. Keys saved locally.`;
-      toast(`Connected as ${getEnvShortLabel()}`, "ok");
+      msg.textContent = `Connected. Keys saved locally.`;
+      toast("Connected", "ok");
       closeAuthDialog();
     }
   });
@@ -2424,7 +2415,7 @@ function bindAuthDialog() {
     const msg = $("#authLoginMsg");
     if (action === "connect") {
       if (!connectCurrentEnv()) {
-        toast("No saved keys for this server", "error");
+        toast("No saved keys", "error");
         return;
       }
       msg.className = "auth-login-msg";
@@ -2434,8 +2425,8 @@ function bindAuthDialog() {
         setEnvConnected(backendEnv, false);
         syncAuthUI("unauthorized");
         msg.className = "auth-login-msg error";
-        msg.textContent = `${getEnvShortLabel()} rejected the saved keys. Sign in while ${getEnvShortLabel()} is selected to fetch the correct key pair.`;
-        toast(`${getEnvShortLabel()} rejected these keys`, "error");
+        msg.textContent = `Saved keys were rejected. Sign in again or paste keys from Panel → Profile.`;
+        toast("These keys were rejected", "error");
         return;
       }
       setJourney({ connected: true });
@@ -2444,11 +2435,11 @@ function bindAuthDialog() {
         msg.className = "auth-login-msg error";
         msg.textContent =
           "Connected with saved keys, but your Shipmozo profile is still under verification.";
-        toast(`Connected as ${getEnvShortLabel()} — account pending`, "error");
+        toast("Connected — account pending", "error");
       } else {
         msg.className = "auth-login-msg ok";
-        msg.textContent = `Connected as ${getEnvShortLabel()}.`;
-        toast(`Connected as ${getEnvShortLabel()}`, "ok");
+        msg.textContent = `Connected.`;
+        toast("Connected", "ok");
         closeAuthDialog();
       }
       return;
@@ -2458,14 +2449,14 @@ function bindAuthDialog() {
       $("#authUsername").value = "";
       $("#authPassword").value = "";
       msg.textContent = "";
-      toast(`${getEnvShortLabel()} disconnected — keys kept in browser`, "info");
+      toast("Disconnected — keys kept in browser", "info");
     }
   });
 }
 
 async function checkProxyAvailable() {
   try {
-    const { data } = await fetchJson("/health");
+    const { data } = await fetchJson(portalUrl("/health"));
     return data?.proxy === true;
   } catch {
     return false;
@@ -2479,7 +2470,7 @@ function showProxyWarning() {
   banner.id = "proxyWarn";
   banner.className = "note warn";
   banner.style.marginBottom = "20px";
-  banner.innerHTML = `<strong>API Tester offline.</strong> Docs work, but live API calls need the Node server. In terminal: <code>cd logistics-api</code> then <code>npm start</code> (stop Live Server / other app on port 3000 first).`;
+  banner.innerHTML = `<strong>API Tester offline.</strong> Docs work, but API calls need the Node server. In terminal: <code>npm start</code> (stop any other app on port 3000 first).`;
   main.prepend(banner);
 }
 
@@ -2547,11 +2538,9 @@ function bindSidebarToggle() {
 }
 
 async function init() {
-  loadBackend();
+  backendEnv = isDevPortalPath() ? "dev" : "live";
   loadCredentials();
-  syncBackendUI();
   bindAuthDialog();
-  bindBackendSwitch();
   bindSidebarToggle();
   refreshAuthStatusFromKeys();
   try {

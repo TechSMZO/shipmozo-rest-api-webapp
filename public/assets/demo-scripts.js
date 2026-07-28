@@ -5,7 +5,7 @@ export const demoWorkflows = [
     id: "domestic",
     label: "Ship a Domestic Order",
     verified: true,
-    description: "Fully verified recorded responses from Dev sandbox.",
+    description: "Fully verified recorded responses from the API sandbox.",
     handoff: { mode: "lifecycle", warehouse_id: "519", delivery_pincode: "122001" },
     steps: [
       {
@@ -232,7 +232,7 @@ export const demoWorkflows = [
         labelPreview: true,
       },
     ],
-    closingNote: "Illustrative demo only — verify international shapes with a live Dev call before go-live.",
+    closingNote: "Illustrative demo only — verify international shapes with a real API call before go-live.",
   },
   {
     id: "return",
