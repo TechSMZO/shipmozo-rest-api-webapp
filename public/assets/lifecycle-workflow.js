@@ -1,4 +1,4 @@
-/** Lifecycle Simulator scenarios — live Dev API chains (not Run Demo). */
+/** Lifecycle Simulator scenarios — real API chains (not Run Demo). */
 
 import { buildPushOrderSample } from "./workflowDefinitions.js";
 

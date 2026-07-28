@@ -273,7 +273,7 @@ export function renderWorkflowPanel(
       </div>
       <p class="page-lead muted">${esc(workflow.description)}</p>
       <div class="note warn small" style="margin-bottom:16px">
-        <strong>Real API calls:</strong> Creates real orders on Dev. Every run ends with mandatory <strong>Cancel Order</strong> cleanup.
+        <strong>Real API calls:</strong> Creates real orders on your account. Every run ends with mandatory <strong>Cancel Order</strong> cleanup.
       </div>
       <div class="wf-progress">${progress}</div>
       <div class="card wf-context-panel">
@@ -571,7 +571,8 @@ export function bindWorkflowPanel(root, api, state) {
     }
 
     const headers = { ...api.authHeaders() };
-    if (!headers["public-key"]) {
+    const isLoginStep = step.path === "/login" || step.operationId === "Login";
+    if (!isLoginStep && !headers["public-key"]) {
       throw new Error("API keys are missing. Open Connect API and save your public/private keys.");
     }
 
@@ -631,6 +632,14 @@ export function bindWorkflowPanel(root, api, state) {
       delete captured._observedOrderShape;
     }
     Object.assign(ctx, captured);
+    if (
+      (step.path === "/login" || step.operationId === "Login") &&
+      result.ok &&
+      api.applyLoginKeysFromPayload?.(result.payload)
+    ) {
+      refreshCredentials();
+      api.toast?.("Connected", "ok");
+    }
     if (step.id === "assign_courier" && !ctx.awb_number) {
       const awb = await resolveAwbNumber(api, ctx);
       if (awb) {
@@ -793,7 +802,7 @@ export function bindWorkflowPanel(root, api, state) {
         fillStepForm(cancelStep);
         const cancelResult = await runLifecycleStep(cancelStep);
         if (!cancelResult.ok && !cancelResult.skipped) {
-          api.toast?.("Cancel order failed — check Dev panel for orphaned test order", "error");
+          api.toast?.("Cancel order failed — check your panel for an orphaned test order", "error");
         }
       } catch (e) {
         stepStates.cancel_order = "failed";

@@ -155,42 +155,6 @@ a:hover { color: var(--brand-hover); }
 
 .topbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
-.backend-switch {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.backend-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.backend-select {
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 7px 28px 7px 10px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E") no-repeat right 8px center;
-  color: var(--text);
-  cursor: pointer;
-  appearance: none;
-}
-
-.backend-select:focus,
-.backend-select:focus-visible {
-  outline: none;
-  border-color: var(--brand);
-  box-shadow: var(--focus-ring);
-}
-
-.backend-select option[value="dev"] { font-weight: 600; }
-.backend-select option[value="live"] { font-weight: 600; }
-
 .postman-btn {
   display: inline-flex;
   align-items: center;
@@ -213,10 +177,6 @@ a:hover { color: var(--brand-hover); }
 
 .postman-local-note {
   margin-top: 10px;
-}
-
-@media (max-width: 720px) {
-  .backend-label { display: none; }
 }
 
 .auth-status {
