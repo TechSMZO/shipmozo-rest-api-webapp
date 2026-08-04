@@ -157,9 +157,9 @@
       {
         "code": "AUTH_LOGIN_FAILED",
         "result": "0",
-        "typicalMessage": "Invalid username or password",
-        "when": "POST /login with bad credentials",
-        "action": "Check panel username/password"
+        "typicalMessage": "Invalid username or password; unknown email/phone may return \"Email or phone number is not registered.\"",
+        "when": "POST /login with bad credentials — wrong password vs username/email not registered",
+        "action": "Verify panel username/password. If the account is unknown, expect \"Email or phone number is not registered.\"; for a wrong password, expect the invalid credentials message."
       },
       {
         "code": "ORDER_NOT_FOUND",
@@ -511,24 +511,24 @@
         "id": "forward-standard",
         "title": "Forward shipment (manual courier)",
         "steps": [
-          "POST /login — store public-key & private-key",
-          "POST /create-warehouse — only if no warehouse exists yet or have to use a new warehouse",
-          "GET /get-warehouses — list warehouses and confirm warehouse_id to use",
-          "POST /push-order — create order in panel",
-          "POST /rate-calculator — choose courier_id",
-          "POST /assign-courier — assign courier & get AWB",
-          "If pickups_automatically_scheduled = NO → POST /schedule-pickup",
-          "GET /get-order-label/{awb_number} — shipping label",
-          "GET /track-order?awb_number=… — tracking"
+          "POST /login\n(store public-key & private-key)",
+          "POST /create-warehouse\n(only if no warehouse exists yet or have to use a new warehouse)",
+          "GET /get-warehouses\n(list warehouses and confirm warehouse_id to use)",
+          "POST /push-order\n(create order in panel)",
+          "POST /rate-calculator\n(choose courier_id using Rate Calculator)",
+          "POST /assign-courier\n(assign courier & get AWB Number)",
+          "POST /schedule-pickup\n(If pickups_automatically_scheduled = NO)",
+          "GET /get-order-label/{awb_number}\n(shipping label)",
+          "GET /track-order?awb_number=…\n(tracking)"
         ]
       },
       {
         "id": "forward-auto",
         "title": "Forward shipment (auto-assign)",
         "steps": [
-          "Configure Settings → Auto assign in Shipmozo panel",
+          "Configure Settings → Auto assign Rule in Shipmozo panel (add Rule)",
           "POST /push-order",
-          "POST /auto-assign-order — AWB + courier in one call",
+          "POST /auto-assign-order\n(AWB + courier in one call)",
           "GET /track-order / get-order-label as needed"
         ]
       },
@@ -546,8 +546,7 @@
         "id": "cancel",
         "title": "Cancel before pickup",
         "steps": [
-          "POST /cancel-order with order_id + awb_number",
-          "Confirm result = 1"
+          "POST /cancel-order\n(order with order_id + awb_number) (Confirm result = 1)"
         ]
       },
       {

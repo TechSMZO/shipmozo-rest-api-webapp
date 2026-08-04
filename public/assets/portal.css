@@ -106,11 +106,13 @@ a:hover { color: var(--brand-hover); }
 
 .brand-logo {
   display: block;
-  height: 36px;
+  height: 40px;
   width: auto;
-  max-width: 140px;
+  max-width: 148px;
+  aspect-ratio: auto;
   object-fit: contain;
   object-position: left center;
+  border-radius: 6px;
 }
 
 .brand-text {
@@ -159,6 +161,33 @@ a:hover { color: var(--brand-hover); }
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+a.btn-primary.postman-btn,
+.btn-primary.postman-btn {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  background: var(--brand);
+  opacity: 1;
+}
+
+a.btn-primary.postman-btn:hover,
+.btn-primary.postman-btn:hover {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  background: var(--brand-hover);
+}
+
+.hero-banner a.btn-primary.postman-btn {
+  background: #fff;
+  color: var(--brand);
+  -webkit-text-fill-color: var(--brand);
+}
+
+.hero-banner a.btn-primary.postman-btn:hover {
+  background: #f1f5f9;
+  color: var(--brand);
+  -webkit-text-fill-color: var(--brand);
 }
 
 .postman-toplink {
@@ -435,10 +464,13 @@ body.sidebar-collapsed .sidebar {
 
 .hero-logo {
   display: block;
-  height: 40px;
+  height: 48px;
   width: auto;
-  max-width: 160px;
+  max-width: 180px;
+  aspect-ratio: auto;
   object-fit: contain;
+  object-position: center;
+  border-radius: 4px;
 }
 
 .hero-banner h2 { font-size: 20px; margin-bottom: 8px; }
@@ -724,6 +756,21 @@ tr:last-child td { border-bottom: none; }
 
 .flow-steps li code {
   font-family: var(--mono);
+}
+
+.workflow-step-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
+.workflow-step-note {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+  font-family: var(--font);
 }
 
 .workflow-step-links {

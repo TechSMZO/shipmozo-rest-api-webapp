@@ -269,7 +269,7 @@ export const domesticLifecycleWorkflow = {
   kind: "lifecycle",
   label: "Order lifecycle (8 steps)",
   description:
-    "Get default warehouse → push order → rate → assign → optional schedule pickup → track → label → mandatory cancel.",
+    "Get default warehouse → push order → Rate Calculator → assign → optional schedule pickup → track → label → mandatory cancel.",
   steps: [
     stepGetWarehouses(),
     {
@@ -312,7 +312,7 @@ export const returnLifecycleWorkflow = {
   kind: "lifecycle",
   label: "Order lifecycle (8 steps)",
   description:
-    "Get return reason → warehouses (return delivery destination) → push return → rate (RETURN, reversed pincodes) → assign → optional schedule → track → mandatory cancel.",
+    "Get return reason → warehouses (return delivery destination) → push return → Rate Calculator (RETURN, reversed pincodes) → assign → optional schedule → track → mandatory cancel.",
   steps: [
     {
       id: "get_return_reason",
@@ -381,7 +381,7 @@ export const internationalLifecycleWorkflow = {
   kind: "lifecycle",
   label: "Order lifecycle (9 steps)",
   description:
-    "Get warehouse → countries → international push → international rate (warn-on-fail) → assign → optional schedule → track → label → mandatory cancel.",
+    "Get warehouse → countries → international push → international Rate Calculator (warn-on-fail) → assign → optional schedule → track → label → mandatory cancel.",
   steps: [
     stepGetWarehouses({ purpose: "Fetch warehouses and pick the default as pickup origin." }),
     {

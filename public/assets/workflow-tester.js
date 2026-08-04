@@ -6,7 +6,7 @@ import {
   extractLifecycleResponse,
   shouldSkipSchedulePickup,
   resolveAwbNumber,
-} from "./lifecycle-workflow.js";
+} from "./lifecycle-workflow.js?v=42";
 
 const WORKFLOW_CTX_KEY = "shipmozo_lifecycle_context";
 const WORKFLOW_MODE_KEY = "shipmozo_tester_mode";

@@ -7,7 +7,7 @@ import {
   loadWorkflowContext,
   loadLifecycleScenarioId,
   getLifecycleWorkflow,
-} from "./workflow-tester.js?v=34";
+} from "./workflow-tester.js?v=42";
 import { loadFieldContracts, renderFieldContract } from "./field-contract-renderer.js?v=34";
 import { renderDemoPage, bindDemoPage } from "./demo-player.js?v=34";
 
@@ -925,7 +925,7 @@ function renderStaticIntro() {
         <img src="/assets/shipmozo-logo.png" alt="Shipmozo" class="hero-logo" width="160" height="52" />
       </div>
       <h2>Developer portal</h2>
-      <p>Integrate orders, couriers, tracking, warehouses, and returns. Connect your API keys and test from the browser.</p>
+      <p>Integrate orders, couriers, tracking, warehouses, and return orders. Connect your API keys and test from the browser.</p>
       <div class="hero-actions">
         <button type="button" class="btn-primary" id="heroConnectBtn">${connected ? "Manage API keys" : "Connect API keys"}</button>
         <a href="#/execute" class="btn-secondary">Open API Tester</a>
@@ -941,11 +941,11 @@ function renderStaticIntro() {
     ${renderSandboxWarningNote()}
 
     <div class="section">
-      <h2>What you can build</h2>
+      <h2>Build With Shipmozo APIs</h2>
       <div class="card-grid">
-        <div class="card"><h3>Forward orders</h3><p>Push orders, compare rates, assign courier, schedule pickup, print labels.</p></div>
-        <div class="card"><h3>Returns</h3><p>Return reasons, push return orders, track reverse logistics.</p></div>
-        <div class="card"><h3>Operations</h3><p>Warehouses, NDR actions, manifests, international shipments.</p></div>
+        <div class="card"><h3>Forward orders</h3><p>Push orders, compare courier rates using the Rate Calculator, assign the best courier partner, schedule pickup and print shipping labels.</p></div>
+        <div class="card"><h3>Reverse Orders (returns)</h3><p>get Return reasons, push return orders, track reverse orders.</p></div>
+        <div class="card"><h3>Operations</h3><p>Manage warehouses, handle NDRs, generate manifests, and international shipments.</p></div>
       </div>
     </div>
 
@@ -1036,23 +1036,36 @@ function renderAuthPage() {
 }
 
 function renderWorkflowStep(step) {
-  const targets = operations.filter((operation) => step.includes(operation.path));
-  const links = targets
-    .map(
-      (operation) =>
-        `<a href="#/execute?op=${encodeURIComponent(operation.id)}">Open ${esc(operation.summary)} in API Tester</a>`
-    )
-    .join(" · ");
-  return `<li><code>${esc(step)}</code>${
-    links ? ` <span class="workflow-step-links">${links}</span>` : ""
-  }</li>`;
+  const raw = typeof step === "string" ? step : String(step?.line || step?.text || "");
+  const parts = raw.split("\n");
+  const main = parts[0].trim();
+  const note = parts
+    .slice(1)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" ");
+  const targets = operations.filter((operation) => main.includes(operation.path));
+  const alreadyHasTesterLink = /API Tester/i.test(main);
+  const links = alreadyHasTesterLink
+    ? ""
+    : targets
+        .map(
+          (operation) =>
+            `<a href="#/execute?op=${encodeURIComponent(operation.id)}">Open ${esc(operation.summary)} in API Tester</a>`
+        )
+        .join(" · ");
+  return `<li class="workflow-step">
+    <div class="workflow-step-main"><code>${esc(main)}</code>${
+      links ? ` <span class="workflow-step-links">${links}</span>` : ""
+    }</div>${note ? `<div class="workflow-step-note">${esc(note)}</div>` : ""}
+  </li>`;
 }
 
 function renderWorkflows() {
   const flows = portalMeta.workflows || [];
   return `
     <h1 class="page-title">Integration flows</h1>
-    <p class="page-lead">End-to-end sequences.</p>
+    <p class="page-lead">Complete API workflows for shipping, tracking, returns, and operations.</p>
     ${flows
       .map(
         (f) => `
