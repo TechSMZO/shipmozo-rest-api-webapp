@@ -35,7 +35,7 @@
               }
             ],
             "url": "{{baseUrl}}/info",
-            "description": "Get Api Version Detail"
+            "description": "Checks whether the Shipmozo API is currently reachable and responding. Requires no authentication — useful as a first connectivity check before setting up credentials."
           },
           "response": []
         }
@@ -65,8 +65,8 @@
                 "type": "text"
               }
             ],
-            "url": "{{baseUrl}}/get-order-label/{{awb_number}}?type_of_label=%7B%7Btype_of_label%7D%7D",
-            "description": "Get Order Label"
+            "url": "{{baseUrl}}/get-order-label/{{awb_number}}",
+            "description": "Returns the shipping label for a shipment as a base64-encoded image, once a courier has been assigned."
           },
           "response": []
         },
@@ -92,7 +92,7 @@
               }
             ],
             "url": "{{baseUrl}}/generate-manifest?awb_numbers=%7B%7Bawb_numbers%7D%7D",
-            "description": "Generate Manifest"
+            "description": "Generates a pickup manifest document for the given AWB number(s)."
           },
           "response": []
         }
@@ -128,7 +128,7 @@
               }
             ],
             "url": "{{baseUrl}}/assign-courier",
-            "description": "Assign Courier",
+            "description": "Manually assigns a courier to an existing order using a courier_id from rate-calculator. Returns the AWB once assignment succeeds.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"order_id\": \"test123\",\n  \"courier_id\": \"1\"\n}",
@@ -168,7 +168,7 @@
               }
             ],
             "url": "{{baseUrl}}/auto-assign-order",
-            "description": "Auto Assign Order",
+            "description": "Automatically assigns a courier to an order based on rules configured in the Shipmozo panel Settings Auto Assign. Requires that feature to be enabled first — otherwise the call fails.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"order_id\": \"test123\"\n}",
@@ -208,7 +208,7 @@
               }
             ],
             "url": "{{baseUrl}}/cancel-order",
-            "description": "cancel order",
+            "description": "Cancels an order before courier pickup. Requires the Shipmozo order_id and awb_number.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"order_id\": \"test123\",\n  \"awb_number\": \"38389839839839\"\n}",
@@ -248,7 +248,7 @@
               }
             ],
             "url": "{{baseUrl}}/international-push-order",
-            "description": "International Push Order in Shipmozo",
+            "description": "Creates an international/export shipment order.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2024-01-06\",\n  \"consignee_name\": \"John\",\n  \"consignee_company_name\": \"John\",\n  \"consignee_phone\": \"8000042323\",\n  \"consignee_alternate_phone\": \"8000042323\",\n  \"consignee_email\": \"johnhelp@gmail.com\",\n  \"consignee_address_line_one\": \"Sector 49\",\n  \"consignee_address_line_two\": \"Sohna Road\",\n  \"consignee_country_id\": \"2\",\n  \"consignee_pin_code\": \"122001\",\n  \"consignee_city\": \"Gurgaon\",\n  \"consignee_state\": \"Haryana\",\n  \"consignee_gst_number\": \"\",\n  \"row_content\": [\n    {\n      \"name\": \"Laptop\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"tax\": 0,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"type_of_package\": \"SPS\",\n  \"shipment_purpose\": \"SCSB4\",\n  \"shipping_charges\": \"\",\n  \"weight\": \"200\",\n  \"length\": \"10\",\n  \"width\": \"20\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"\",\n  \"gst_ewaybill_number\": \"\",\n  \"gstin_number\": \"\",\n  \"currency\": \"INR\",\n  \"iec_number\": \"\",\n  \"terms_of_invoice\": \"FOB\",\n  \"ecomm\": \"NO\",\n  \"ad_code\": \"\",\n  \"invoice_number\": \"\",\n  \"invoice_date\": \"2025-04-01\",\n  \"meis\": \"NO\",\n  \"export_type\": \"NA\",\n  \"ioss_number\": \"\",\n  \"lut_number\": \"\",\n  \"lut_issue_date\": \"\",\n  \"lut_till_date\": \"\",\n  \"freight_amount\": \"\",\n  \"incoterms\": \"DDP\",\n  \"insurance_amount\": \"\",\n  \"shipper_id\": \"\"\n}",
@@ -288,10 +288,10 @@
               }
             ],
             "url": "{{baseUrl}}/push-order",
-            "description": "Push Order in Shipmozo",
+            "description": "Creates a domestic shipment order in Shipmozo and returns the internal order_id used for all downstream calls (rates, assign, track, cancel).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2026-06-06\",\n  \"consignee_name\": \"John\",\n  \"consignee_phone\": \"8000042323\",\n  \"consignee_alternate_phone\": \"\",\n  \"consignee_email\": \"johnhelp@gmail.com\",\n  \"consignee_address_line_one\": \"Sector 49\",\n  \"consignee_address_line_two\": \"Sohna Road\",\n  \"consignee_pin_code\": \"122001\",\n  \"consignee_city\": \"Gurgaon\",\n  \"consignee_state\": \"Haryana\",\n  \"product_detail\": [\n    {\n      \"name\": \"Laptop\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"payment_type\": \"PREPAID\",\n  \"cod_amount\": \"\",\n  \"shipping_charges\": \"\",\n  \"weight\": \"200\",\n  \"length\": \"10\",\n  \"width\": \"20\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"\",\n  \"gst_ewaybill_number\": \"\",\n  \"gstin_number\": \"\"\n}",
+              "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2026-06-06\",\n  \"consignee_name\": \"John\",\n  \"consignee_phone\": \"8000042323\",\n  \"consignee_alternate_phone\": \"\",\n  \"consignee_email\": \"johnhelp@gmail.com\",\n  \"consignee_address_line_one\": \"Sector 49\",\n  \"consignee_address_line_two\": \"Sohna Road\",\n  \"consignee_pin_code\": \"122001\",\n  \"consignee_city\": \"Gurgaon\",\n  \"consignee_state\": \"Haryana\",\n  \"product_detail\": [\n    {\n      \"name\": \"Laptop\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"payment_type\": \"PREPAID\",\n  \"cod_amount\": \"\",\n  \"shipping_charges\": \"\",\n  \"weight\": \"200\",\n  \"length\": \"10\",\n  \"width\": \"20\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"12\",\n  \"gst_ewaybill_number\": \"\",\n  \"gstin_number\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -328,7 +328,7 @@
               }
             ],
             "url": "{{baseUrl}}/push-return-order",
-            "description": "Push Return Order in Shipmozo",
+            "description": "Creates a reverse/return shipment with pickup from the customer address. Use a return_reason_id from get-return-reason.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2024-07-27\",\n  \"pickup_name\": \"John\",\n  \"pickup_phone\": \"8000042323\",\n  \"pickup_email\": \"johnhelp@gmail.com\",\n  \"pickup_address_line_one\": \"Sector 49\",\n  \"pickup_address_line_two\": \"Sohna Road\",\n  \"pickup_pin_code\": \"122001\",\n  \"pickup_city\": \"Gurgaon\",\n  \"pickup_state\": \"Haryana\",\n  \"product_detail\": [\n    {\n      \"name\": \"Product Name\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"payment_type\": \"PREPAID\",\n  \"weight\": \"2\",\n  \"length\": \"10\",\n  \"width\": \"500\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"\",\n  \"return_reason_id\": \"\",\n  \"customer_request\": \"REFUND\",\n  \"reason_comment\": \"\"\n}",
@@ -363,7 +363,7 @@
               }
             ],
             "url": "{{baseUrl}}/get-order-detail/{{order_id}}",
-            "description": "Get Order Detail"
+            "description": "Returns full details for an order by order_id."
           },
           "response": []
         },
@@ -389,7 +389,7 @@
               }
             ],
             "url": "{{baseUrl}}/get-ndr-all?from=%7B%7Bfrom%7D%7D&to=%7B%7Bto%7D%7D&per_page=%7B%7Bper_page%7D%7D&page=%7B%7Bpage%7D%7D",
-            "description": "Get Ndr Orders"
+            "description": "Lists non-delivery report (NDR) shipments that need action."
           },
           "response": []
         },
@@ -420,7 +420,7 @@
               }
             ],
             "url": "{{baseUrl}}/schedule-pickup",
-            "description": "Schedule Pickup",
+            "description": "Schedules a courier pickup for an order whose assigned courier does not automatically schedule pickup (pickups_automatically_scheduled: NO from Rate Calculator).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"order_id\": \"test123\"\n}",
@@ -455,7 +455,7 @@
               }
             ],
             "url": "{{baseUrl}}/ndr-action/{{awb_number}}?action=%7B%7Baction%7D%7D",
-            "description": "NDR Action"
+            "description": "Takes an action on an NDR shipment (reattempt, RTO, etc.)."
           },
           "response": []
         }
@@ -486,7 +486,7 @@
               }
             ],
             "url": "{{baseUrl}}/track-order?awb_number=%7B%7Bawb_number%7D%7D",
-            "description": "Track Order Shipment Status"
+            "description": "Returns the current tracking status and scan history for a shipment by AWB number."
           },
           "response": []
         }
@@ -522,7 +522,7 @@
               }
             ],
             "url": "{{baseUrl}}/rate-calculator",
-            "description": "Rate Calculator",
+            "description": "Returns available couriers and their rates for a shipment between two pincodes. Also useful as a serviceability check — if it returns one or more couriers, the pincode pair is serviceable.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"order_id\": \"\",\n  \"pickup_pincode\": \"122001\",\n  \"delivery_pincode\": \"110001\",\n  \"payment_type\": \"PREPAID\",\n  \"shipment_type\": \"FORWARD\",\n  \"order_amount\": \"1000\",\n  \"type_of_package\": \"SPS\",\n  \"rov_type\": \"ROV_OWNER\",\n  \"cod_amount\": \"\",\n  \"weight\": \"500\",\n  \"dimensions\": [\n    {\n      \"no_of_box\": \"1\",\n      \"length\": \"22\",\n      \"width\": \"10\",\n      \"height\": \"10\"\n    }\n  ]\n}",
@@ -562,7 +562,7 @@
               }
             ],
             "url": "{{baseUrl}}/international-rate-calculator",
-            "description": "Internatinal Rate Calculator",
+            "description": "Compares international courier rates for a given destination and package.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"pickup_pincode\": \"122001\",\n  \"delivery_pincode\": \"110001\",\n  \"delivery_country_id\": \"2\",\n  \"order_amount\": \"1000\",\n  \"type_of_package\": \"SPS\",\n  \"shipment_purpose\": \"SCSB4\",\n  \"weight\": \"500\",\n  \"dimensions\": [\n    {\n      \"no_of_box\": \"1\",\n      \"length\": \"22\",\n      \"width\": \"10\",\n      \"height\": \"10\"\n    }\n  ]\n}",
@@ -597,7 +597,7 @@
               }
             ],
             "url": "{{baseUrl}}/countries",
-            "description": "Get All Countries"
+            "description": "Returns countries available for international shipping. Use country ids when creating international orders."
           },
           "response": []
         },
@@ -623,7 +623,7 @@
               }
             ],
             "url": "{{baseUrl}}/get-return-reason",
-            "description": "Get All Return Reason"
+            "description": "Lists valid return reason IDs to pass when creating a return order."
           },
           "response": []
         },
@@ -644,7 +644,7 @@
               }
             ],
             "url": "{{baseUrl}}/login",
-            "description": "Login",
+            "description": "Exchanges a Shipmozo panel username and password for the public_key / private_key pair used to authenticate all other requests. On success, data is an array: [{ name, public_key, private_key }] — note the array wrapping.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"username\": \"\",\n  \"password\": \"\"\n}",
@@ -684,7 +684,7 @@
               }
             ],
             "url": "{{baseUrl}}/create-shipper",
-            "description": "create shipper",
+            "description": "Registers a shipper/exporter profile used for international shipments.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Rahul\",\n  \"phone\": \"9876543210\",\n  \"email\": \"test@gmail.com\",\n  \"address_line_one\": \"delhi railway station\",\n  \"address_line_two\": \"new delhi\",\n  \"pin_code\": \"141211\"\n}",
@@ -729,7 +729,7 @@
               }
             ],
             "url": "{{baseUrl}}/order/update-warehouse",
-            "description": "Order Update Warehouse",
+            "description": "Updates which warehouse is associated with an already-created order.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"order_id\": \"test123\",\n  \"warehouse_id\": \"1\"\n}",
@@ -764,7 +764,7 @@
               }
             ],
             "url": "{{baseUrl}}/get-warehouses?page=%7B%7Bpage%7D%7D",
-            "description": "Get all Warehouses"
+            "description": "Returns all warehouses configured on your Shipmozo account, including the default warehouse used for pushing orders."
           },
           "response": []
         },
@@ -795,7 +795,7 @@
               }
             ],
             "url": "{{baseUrl}}/create-warehouse",
-            "description": "create Warehouse",
+            "description": "Registers a new warehouse (pickup location) on your Shipmozo account and returns its warehouse_id.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"address_title\": \"test123\",\n  \"name\": \"Rahul\",\n  \"phone\": \"9876543210\",\n  \"alternate_phone\": \"9876543210\",\n  \"email\": \"test@gmail.com\",\n  \"address_line_one\": \"delhi railway station\",\n  \"address_line_two\": \"new delhi\",\n  \"pin_code\": \"141211\"\n}",

@@ -141,102 +141,60 @@
     },
     "errorCodes": [
       {
-        "code": "PROFILE_UNDER_VERIFICATION",
+        "id": "profile-under-verification",
         "result": "0",
         "typicalMessage": "Your profile is under verification",
         "when": "Seller KYC not completed or pending approval on Shipmozo panel",
-        "action": "Finish verification in Shipmozo panel — keys are valid; APIs stay blocked until account is approved"
+        "action": "Finish verification in Shipmozo panel — keys may be valid while APIs stay blocked until approval"
       },
       {
-        "code": "AUTH_INVALID",
+        "id": "invalid-api-keys",
         "result": "0",
-        "typicalMessage": "Invalid API credentials",
-        "when": "Wrong or missing public-key / private-key",
-        "action": "Re-login via POST /login or verify panel keys"
+        "typicalMessage": "unauthorised user access / Invalid API credentials",
+        "when": "Wrong, missing, or expired public-key / private-key",
+        "action": "Re-login via POST /login or paste fresh keys from Panel → Profile"
       },
       {
-        "code": "AUTH_LOGIN_FAILED",
+        "id": "login-failed",
         "result": "0",
-        "typicalMessage": "Invalid username or password; unknown email/phone may return \"Email or phone number is not registered.\"",
-        "when": "POST /login with bad credentials — wrong password vs username/email not registered",
-        "action": "Verify panel username/password. If the account is unknown, expect \"Email or phone number is not registered.\"; for a wrong password, expect the invalid credentials message."
+        "typicalMessage": "Invalid username or password (exact text unverified). Unknown email/phone may return \"Email or phone number is not registered.\"",
+        "when": "POST /login with bad credentials",
+        "action": "Verify panel username/password. Unknown accounts may return the unregistered email/phone message."
       },
       {
-        "code": "ORDER_NOT_FOUND",
+        "id": "order-not-found",
         "result": "0",
         "typicalMessage": "Order not found",
-        "when": "order_id unknown for assign, schedule, cancel, get-detail",
-        "action": "Push order first; use same order_id as on your store"
+        "when": "Unknown order_id on assign, schedule, cancel, or get-detail",
+        "action": "Push the order first; use Shipmozo internal order_id from push-order response"
       },
       {
-        "code": "ORDER_ALREADY_EXISTS",
+        "id": "invalid-warehouse",
         "result": "0",
-        "typicalMessage": "Order already exists",
-        "when": "Duplicate order_id on push-order",
-        "action": "Use unique order_id or fetch existing via get-order-detail"
+        "typicalMessage": "The selected warehouse id is invalid.",
+        "when": "push-order with a warehouse_id that does not belong to the account",
+        "action": "Call get-warehouses or create-warehouse and use a returned warehouse_id"
       },
       {
-        "code": "WAREHOUSE_REQUIRED",
-        "result": "0",
-        "typicalMessage": "warehouse_id is required",
-        "when": "push-order without valid warehouse_id",
-        "action": "Call get-warehouses or create-warehouse"
-      },
-      {
-        "code": "COURIER_ASSIGN_FAILED",
-        "result": "0",
-        "typicalMessage": "Courier assignment failed",
-        "when": "Invalid courier_id or order state",
-        "action": "Run rate-calculator; use returned courier_id"
-      },
-      {
-        "code": "AUTO_ASSIGN_NOT_CONFIGURED",
+        "id": "auto-assign-not-setup",
         "result": "0",
         "typicalMessage": "please setup auto assign",
-        "when": "auto-assign-order without panel Settings > Auto assign",
-        "action": "Enable auto-assign in Shipmozo panel or use assign-courier"
+        "when": "auto-assign-order without panel Settings → Auto Assign configured",
+        "action": "Enable Auto Assign rules in the Shipmozo panel, or use assign-courier instead"
       },
       {
-        "code": "PICKUP_ALREADY_SCHEDULED",
+        "id": "rate-limit",
         "result": "0",
-        "typicalMessage": "Pickup already scheduled",
-        "when": "schedule-pickup when pickups_automatically_scheduled = YES",
-        "action": "Skip schedule-pickup; AWB already generated"
+        "typicalMessage": "Rate limit exceeded (or HTTP 429)",
+        "when": "Too many calls in the shared 1-minute window",
+        "action": "Pause and retry after ~60s"
       },
       {
-        "code": "CANCEL_NOT_ALLOWED",
-        "result": "0",
-        "typicalMessage": "Cannot cancel order",
-        "when": "Shipment picked up or delivered",
-        "action": "Check order status via track-order"
-      },
-      {
-        "code": "AWB_NOT_FOUND",
-        "result": "0",
-        "typicalMessage": "AWB not found",
-        "when": "track-order / get-order-label with invalid awb_number",
-        "action": "Use awb_number from assign-courier or auto-assign response"
-      },
-      {
-        "code": "VALIDATION_ERROR",
-        "result": "0",
-        "typicalMessage": "Validation error",
-        "when": "Missing required JSON fields",
-        "action": "Fix request body per parameter table"
-      },
-      {
-        "code": "RATE_LIMIT",
-        "result": "0",
-        "typicalMessage": "Rate limit exceeded",
-        "when": "x-ratelimit-remaining hits 0 within the 1-minute window or HTTP 429",
-        "action": "Pause calls; retry after ~60s when remaining rises again"
-      },
-      {
-        "code": "CORS_TRAILING_SLASH",
+        "id": "cors-trailing-slash",
         "result": "—",
         "typicalMessage": "Browser CORS error",
-        "when": "Base URL ends with /",
-        "action": "Use https://appiify.com/app/api/v1 without trailing slash"
+        "when": "Base URL ends with a trailing slash after /v1",
+        "action": "Use the base URL without a trailing slash"
       }
     ],
     "navigation": {
@@ -593,36 +551,238 @@
     "getApiInfo": {
       "security": [],
       "summary": "Check API health / version",
+      "description": "Checks whether the Shipmozo API is currently reachable and responding. Requires no authentication — useful as a first connectivity check before setting up credentials.",
       "x-useCases": [
         "Health check before batch jobs",
         "Verify connectivity from new server"
-      ]
-    },
-    "Login": {
-      "security": [],
-      "summary": "Login & obtain API keys",
-      "x-useCases": [
-        "Bootstrap integration — fetch public_key and private_key",
-        "Rotate keys after password change"
-      ],
-      "x-errors": [
-        "AUTH_LOGIN_FAILED"
       ],
       "responses": {
         "200": {
           "content": {
             "application/json": {
-              "schema": {
-                "example": {
-                  "result": "1",
-                  "message": "Success",
-                  "data": [
-                    {
-                      "name": "Seller Name",
-                      "public_key": "YOUR_PUBLIC_KEY",
-                      "private_key": "YOUR_PRIVATE_KEY"
-                    }
-                  ]
+              "example": {
+                "result": "1",
+                "message": "Success",
+                "data": {
+                  "version": "v1"
+                }
+              }
+            }
+          }
+        }
+      },
+      "x-responseFields": [
+        {
+          "name": "result",
+          "notes": "\"1\" means the API responded successfully."
+        },
+        {
+          "name": "message",
+          "notes": "Human-readable outcome."
+        },
+        {
+          "name": "data",
+          "notes": "Health/version details when provided by the API."
+        }
+      ],
+      "x-errorExampleUnavailable": true
+    },
+    "Login": {
+      "security": [],
+      "summary": "Login & obtain API keys",
+      "description": "Exchanges a Shipmozo panel username and password for the public_key / private_key pair used to authenticate all other requests. On success, data is an array: [{ name, public_key, private_key }] — note the array wrapping.",
+      "x-useCases": [
+        "Bootstrap integration — fetch public_key and private_key",
+        "Rotate keys after password change"
+      ],
+      "x-errorExampleUnavailable": true,
+      "x-responseFields": [
+        {
+          "name": "data[0].name",
+          "notes": "Seller / account display name."
+        },
+        {
+          "name": "data[0].public_key",
+          "notes": "Send as the public-key header on later calls."
+        },
+        {
+          "name": "data[0].private_key",
+          "notes": "Send as the private-key header on later calls. Keep server-side only."
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "example": {
+                "result": "1",
+                "message": "Success",
+                "data": [
+                  {
+                    "name": "Seller Name",
+                    "public_key": "YOUR_PUBLIC_KEY",
+                    "private_key": "YOUR_PRIVATE_KEY"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "x-docNotes": [
+        "Success data is an array of one object — do not treat data as a plain object."
+      ]
+    },
+    "getWarehouses": {
+      "summary": "List your warehouses",
+      "description": "Returns all warehouses configured on your Shipmozo account, including the default warehouse used for pushing orders.",
+      "x-queryExamples": [
+        "?page=2"
+      ],
+      "x-responseFields": [
+        {
+          "name": "id",
+          "notes": "Warehouse ID to use as warehouse_id on push-order and related calls."
+        },
+        {
+          "name": "default",
+          "notes": "\"YES\" marks the warehouse used automatically when none is specified elsewhere; otherwise \"NO\"."
+        },
+        {
+          "name": "address_title",
+          "notes": "Label for this warehouse in the panel."
+        },
+        {
+          "name": "name",
+          "notes": "Contact name for the warehouse."
+        },
+        {
+          "name": "email",
+          "notes": "Contact email."
+        },
+        {
+          "name": "phone",
+          "notes": "Primary phone (digits)."
+        },
+        {
+          "name": "alt_phone",
+          "notes": "Alternate phone, if set."
+        },
+        {
+          "name": "address_line_one",
+          "notes": "Primary street address."
+        },
+        {
+          "name": "address_line_two",
+          "notes": "Secondary address line."
+        },
+        {
+          "name": "pincode",
+          "notes": "Pickup pincode."
+        },
+        {
+          "name": "city",
+          "notes": "City."
+        },
+        {
+          "name": "state",
+          "notes": "State."
+        },
+        {
+          "name": "country",
+          "notes": "Country."
+        },
+        {
+          "name": "status",
+          "notes": "Warehouse status in Shipmozo (e.g. ACTIVE)."
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "example": {
+                "result": "1",
+                "message": "Success",
+                "data": [
+                  {
+                    "id": "12345",
+                    "default": "YES",
+                    "address_title": "Main Warehouse",
+                    "name": "Rahul",
+                    "email": "ops@example.com",
+                    "phone": "9876543210",
+                    "alt_phone": "",
+                    "address_line_one": "12 MG Road",
+                    "address_line_two": "Near Metro",
+                    "pincode": "110001",
+                    "city": "New Delhi",
+                    "state": "Delhi",
+                    "country": "India",
+                    "status": "ACTIVE"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "createWarehouse": {
+      "summary": "Register a new warehouse",
+      "description": "Registers a new warehouse (pickup location) on your Shipmozo account and returns its warehouse_id.",
+      "x-docNotes": [
+        "If you reuse an existing address_title, Shipmozo typically returns the existing warehouse_id instead of creating a duplicate or erroring."
+      ],
+      "x-responseFields": [
+        {
+          "name": "warehouse_id",
+          "notes": "ID to pass as warehouse_id on push-order and related calls."
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "example": {
+                "result": "1",
+                "message": "Success",
+                "data": {
+                  "warehouse_id": "12345"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "orderUpdateWarehouse": {
+      "summary": "Change an order's linked warehouse",
+      "description": "Updates which warehouse is associated with an already-created order.",
+      "x-docNotes": [
+        "order_id must be Shipmozo internal order_id from push-order — not your storefront order id alone.",
+        "Live responses may spell the reference field as refrence_id (missing e). Parse that spelling when reading responses."
+      ],
+      "x-responseFields": [
+        {
+          "name": "order_id",
+          "notes": "Shipmozo internal order id."
+        },
+        {
+          "name": "refrence_id",
+          "notes": "Reference echoed by the API (live spelling often omits an e)."
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "example": {
+                "result": "1",
+                "message": "Success",
+                "data": {
+                  "order_id": "98765",
+                  "refrence_id": "STORE-1001"
                 }
               }
             }
@@ -632,27 +792,193 @@
     },
     "pushOrders": {
       "summary": "Create a new shipment order",
+      "description": "Creates a domestic shipment order in Shipmozo and returns the internal order_id used for all downstream calls (rates, assign, track, cancel).",
       "x-useCases": [
         "Sync e-commerce order to Shipmozo panel",
         "COD and prepaid orders"
       ],
-      "x-errors": [
-        "ORDER_ALREADY_EXISTS",
-        "WAREHOUSE_REQUIRED",
-        "VALIDATION_ERROR"
+      "x-errorExample": {
+        "result": "0",
+        "message": "Error",
+        "data": {
+          "error": "The selected warehouse id is invalid."
+        }
+      },
+      "x-responseFields": [
+        {
+          "name": "Info",
+          "notes": "Human-readable success note when present."
+        },
+        {
+          "name": "order_id",
+          "notes": "Shipmozo internal order ID — use this for all downstream APIs."
+        },
+        {
+          "name": "refrence_id",
+          "notes": "Echo of the order_id you sent (store id). Not for chaining later calls."
+        },
+        {
+          "name": "error",
+          "notes": "Populated on failure with the validation or business error text."
+        }
+      ],
+      "x-failureFields": [
+        {
+          "name": "error",
+          "notes": "Failure reason string (e.g. invalid warehouse)"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation",
+          "content": {
+            "application/json": {
+              "example": {
+                "result": "1",
+                "message": "Success",
+                "data": {
+                  "Info": "Order Pushed Successfully",
+                  "order_id": "ordID",
+                  "refrence_id": "ordID"
+                }
+              }
+            }
+          }
+        }
+      },
+      "x-docNotes": [
+        "Weight is in grams. Dimensions are in cm. Dates use YYYY-MM-DD. Phone fields are digits only (no country code)."
       ]
     },
-    "internationalPushOrder": {
-      "summary": "Create a new international shipment order",
+    "rateCalculator": {
+      "summary": "Compare courier rates for a shipment",
+      "description": "Returns available couriers and their rates for a shipment between two pincodes. Also useful as a serviceability check — if it returns one or more couriers, the pincode pair is serviceable.",
+      "x-responseFields": [
+        {
+          "name": "id",
+          "notes": "Courier id — pass as courier_id to assign-courier."
+        },
+        {
+          "name": "name",
+          "notes": "Courier display name."
+        },
+        {
+          "name": "estimated_delivery",
+          "notes": "Estimated delivery date when provided."
+        },
+        {
+          "name": "total_charges",
+          "notes": "Total charge including GST components when provided."
+        },
+        {
+          "name": "shipping_charges",
+          "notes": "Base shipping charge."
+        },
+        {
+          "name": "gst",
+          "notes": "GST amount."
+        },
+        {
+          "name": "pickups_automatically_scheduled",
+          "notes": "\"YES\" means you can skip schedule-pickup; \"NO\" means call schedule-pickup after assign."
+        },
+        {
+          "name": "from_zone",
+          "notes": "Origin zone used for rating."
+        },
+        {
+          "name": "to_zone",
+          "notes": "Destination zone used for rating."
+        }
+      ],
       "responses": {
         "200": {
           "content": {
             "application/json": {
-              "schema": {
-                "example": {
-                  "result": "1",
-                  "message": "Success",
-                  "data": "[PLACEHOLDER — needs live verification]"
+              "example": {
+                "result": "1",
+                "message": "Success",
+                "data": [
+                  {
+                    "id": "12",
+                    "name": "Demo Courier",
+                    "estimated_delivery": "2026-08-08",
+                    "total_charges": "85.00",
+                    "shipping_charges": "72.00",
+                    "gst": "13.00",
+                    "pickups_automatically_scheduled": "NO",
+                    "from_zone": "A",
+                    "to_zone": "B"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "x-docNotes": [
+        "Each courier id in the response is the courier_id used in Assign Courier.",
+        "Weight is in grams. Dimensions (length, width, height) are in cm."
+      ]
+    },
+    "assignCourier": {
+      "summary": "Assign a courier and get the AWB",
+      "description": "Manually assigns a courier to an existing order using a courier_id from rate-calculator. Returns the AWB once assignment succeeds.",
+      "x-useCases": [
+        "Manual courier selection after rate comparison"
+      ]
+    },
+    "autoCourierAssign": {
+      "summary": "Auto-assign a courier (per panel settings)",
+      "description": "Automatically assigns a courier to an order based on rules configured in the Shipmozo panel Settings Auto Assign. Requires that feature to be enabled first — otherwise the call fails.",
+      "x-useCases": [
+        "One-shot assign when panel auto-assign is configured"
+      ],
+      "x-docNotes": [
+        "Prerequisite: configure Auto Assign rules in the Shipmozo panel before calling this endpoint."
+      ],
+      "x-errorExample": {
+        "result": "0",
+        "message": "Error",
+        "data": {
+          "error": "please setup auto assign"
+        }
+      },
+      "x-responseFields": [
+        {
+          "name": "order_id",
+          "notes": "Shipmozo internal order id."
+        },
+        {
+          "name": "reference_id",
+          "notes": "Reference returned by the API (spelling may vary)."
+        },
+        {
+          "name": "awb_number",
+          "notes": "Air Waybill — use for track-order and get-order-label."
+        },
+        {
+          "name": "courier_company",
+          "notes": "Assigned courier name."
+        },
+        {
+          "name": "courier_company_service",
+          "notes": "Service level when provided."
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "example": {
+                "result": "1",
+                "message": "Success",
+                "data": {
+                  "order_id": "98765",
+                  "reference_id": "STORE-1001",
+                  "awb_number": "AWB123456789",
+                  "courier_company": "Demo Courier",
+                  "courier_company_service": "Surface"
                 }
               }
             }
@@ -660,60 +986,203 @@
         }
       }
     },
-    "pushReturnOrder": {
-      "summary": "Create a return/reverse shipment order",
-      "x-useCases": [
-        "Customer return with pickup from customer address"
-      ],
-      "x-errors": [
-        "VALIDATION_ERROR",
-        "ORDER_NOT_FOUND"
-      ]
-    },
-    "assignCourier": {
-      "x-useCases": [
-        "Manual courier selection after rate comparison"
-      ],
-      "x-errors": [
-        "ORDER_NOT_FOUND",
-        "COURIER_ASSIGN_FAILED"
-      ],
-      "summary": "Assign a courier and get the AWB"
-    },
     "schedulePickup": {
+      "summary": "Schedule a courier pickup",
+      "description": "Schedules a courier pickup for an order whose assigned courier does not automatically schedule pickup (pickups_automatically_scheduled: NO from Rate Calculator).",
       "x-useCases": [
         "When rate-calculator returns pickups_automatically_scheduled: NO"
       ],
-      "x-errors": [
-        "ORDER_NOT_FOUND",
-        "PICKUP_ALREADY_SCHEDULED"
+      "x-docNotes": [
+        "Only call this when Rate Calculator showed pickups_automatically_scheduled: \"NO\" for the chosen courier; otherwise the AWB is already assigned."
       ],
-      "summary": "Schedule a courier pickup"
+      "x-errorExample": {
+        "result": "0",
+        "message": "Order not found"
+      },
+      "x-responseFields": [
+        {
+          "name": "order_id",
+          "notes": "Shipmozo internal order id."
+        },
+        {
+          "name": "reference_id",
+          "notes": "Reference returned by the API."
+        },
+        {
+          "name": "courier",
+          "notes": "Courier name."
+        },
+        {
+          "name": "awb_number",
+          "notes": "Air Waybill after pickup scheduling."
+        },
+        {
+          "name": "lr_number",
+          "notes": "LR number when provided by the courier."
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "example": {
+                "result": "1",
+                "message": "Success",
+                "data": {
+                  "order_id": "98765",
+                  "reference_id": "STORE-1001",
+                  "courier": "Demo Courier",
+                  "awb_number": "AWB123456789",
+                  "lr_number": "LR001"
+                }
+              }
+            }
+          }
+        }
+      }
     },
-    "cancelOrder": {
-      "summary": "Cancel an order",
-      "x-useCases": [
-        "Cancel before courier pickup"
+    "getOrderLabel": {
+      "summary": "Download the shipping label",
+      "description": "Returns the shipping label for a shipment as a base64-encoded image, once a courier has been assigned.",
+      "x-responseFields": [
+        {
+          "name": "data[].label",
+          "notes": "Base64 data-URL for the label image (typically PNG)."
+        },
+        {
+          "name": "data[].created_at",
+          "notes": "When the label was generated."
+        }
       ],
-      "x-errors": [
-        "ORDER_NOT_FOUND",
-        "CANCEL_NOT_ALLOWED"
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "example": {
+                "result": "1",
+                "message": "Success",
+                "data": [
+                  {
+                    "label": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                    "created_at": "2026-08-05 12:00:00"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "x-docNotes": [
+        "awb_number comes from Assign Courier, Auto-Assign, or Schedule Pickup.",
+        "The verified response shape is a PNG base64 data-URL — not a caller-selected PDF/ZPL format."
       ]
     },
-    "autoCourierAssign": {
-      "x-useCases": [
-        "One-shot assign when panel auto-assign is configured"
+    "generateManifest": {
+      "summary": "Generate a pickup manifest",
+      "description": "Generates a pickup manifest document for the given AWB number(s).",
+      "x-exampleUnavailable": true,
+      "x-queryExamples": [
+        "?awb_numbers=123123123,456456456 — supports multiple comma-separated AWB numbers"
       ],
-      "x-errors": [
-        "AUTO_ASSIGN_NOT_CONFIGURED",
-        "ORDER_NOT_FOUND"
+      "responses": {
+        "200": {
+          "x-exampleUnavailable": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "x-docNotes": [
+        "awb_numbers supports multiple comma-separated AWB numbers. A specific maximum per request is not independently verified in this portal."
       ],
-      "summary": "Auto-assign a courier (per panel settings)"
+      "x-errorExampleUnavailable": true
     },
     "trackOrder": {
       "summary": "Track a shipment's status",
-      "x-errors": [
-        "AWB_NOT_FOUND"
+      "description": "Returns the current tracking status and scan history for a shipment by AWB number.",
+      "x-queryExamples": [
+        "?awb_number=YOUR_AWB"
+      ],
+      "x-responseFields": [
+        {
+          "name": "order_id",
+          "notes": "Shipmozo internal order id."
+        },
+        {
+          "name": "refrence_id",
+          "notes": "Reference field (live spelling often omits an e)."
+        },
+        {
+          "name": "awb_number",
+          "notes": "Tracking AWB."
+        },
+        {
+          "name": "rto_awb_number",
+          "notes": "RTO AWB when applicable."
+        },
+        {
+          "name": "courier",
+          "notes": "Courier name."
+        },
+        {
+          "name": "order_status",
+          "notes": "High-level order status."
+        },
+        {
+          "name": "expected_delivery_date",
+          "notes": "ETA when provided."
+        },
+        {
+          "name": "current_status",
+          "notes": "Latest scan/status text (e.g. Pickup Pending)."
+        },
+        {
+          "name": "status_time",
+          "notes": "Timestamp of the current status."
+        },
+        {
+          "name": "scan_detail",
+          "notes": "Array of scan events when provided."
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "example": {
+                "result": "1",
+                "message": "Success",
+                "data": {
+                  "order_id": "98765",
+                  "refrence_id": "STORE-1001",
+                  "awb_number": "AWB123456789",
+                  "rto_awb_number": "",
+                  "courier": "Demo Courier",
+                  "order_status": "Pickup Pending",
+                  "expected_delivery_date": "2026-08-10",
+                  "current_status": "Pickup Pending",
+                  "status_time": "2026-08-05 10:15:00",
+                  "scan_detail": []
+                }
+              }
+            }
+          }
+        }
+      },
+      "x-docNotes": [
+        "awb_number is obtained from Assign Courier, Auto-Assign, or Schedule Pickup."
+      ],
+      "x-errorExampleUnavailable": true
+    },
+    "pushReturnOrder": {
+      "summary": "Create a return/reverse shipment order",
+      "description": "Creates a reverse/return shipment with pickup from the customer address. Use a return_reason_id from get-return-reason.",
+      "x-useCases": [
+        "Customer return with pickup from customer address"
       ]
     },
     "getReturnReason": {
@@ -726,120 +1195,80 @@
           "ApiKeyPrivate": []
         }
       ],
+      "description": "Lists valid return reason IDs to pass when creating a return order.",
       "x-useCases": [
         "Populate return reason dropdown before push-return-order"
       ]
     },
-    "createShipper": {
-      "summary": "Register a shipper profile"
+    "cancelOrder": {
+      "summary": "Cancel an order",
+      "description": "Cancels an order before courier pickup. Requires the Shipmozo order_id and awb_number.",
+      "x-useCases": [
+        "Cancel before courier pickup"
+      ]
     },
-    "createWarehouse": {
-      "summary": "Register a new warehouse"
+    "createShipper": {
+      "summary": "Register a shipper profile",
+      "description": "Registers a shipper/exporter profile used for international shipments."
     },
     "getAllNdrShipments": {
       "summary": "List failed-delivery (NDR) orders",
+      "description": "Lists non-delivery report (NDR) shipments that need action.",
+      "x-exampleUnavailable": true,
       "responses": {
         "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "example": {
-                  "result": "1",
-                  "message": "Success",
-                  "data": "[PLACEHOLDER — needs live verification]"
-                }
-              }
-            }
-          }
+          "description": "Successful operation",
+          "x-exampleUnavailable": true
         }
       }
     },
     "Countries": {
       "summary": "Get list of countries (for international shipments)",
+      "description": "Returns countries available for international shipping. Use country ids when creating international orders.",
+      "x-exampleUnavailable": true,
       "responses": {
         "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "example": {
-                  "result": "1",
-                  "message": "Success",
-                  "data": "[PLACEHOLDER — needs live verification]"
-                }
-              }
-            }
-          }
+          "description": "Successful operation",
+          "x-exampleUnavailable": true
         }
       }
     },
     "getOrderDetail": {
       "summary": "Get full details of an order",
+      "description": "Returns full details for an order by order_id.",
+      "x-exampleUnavailable": true,
       "responses": {
         "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "example": {
-                  "result": "1",
-                  "message": "Success",
-                  "data": "[PLACEHOLDER — needs live verification]"
-                }
-              }
-            }
-          }
+          "description": "Successful operation",
+          "x-exampleUnavailable": true
         }
       }
     },
-    "generateManifest": {
-      "summary": "Generate a pickup manifest",
+    "internationalPushOrder": {
+      "summary": "Create a new international shipment order",
+      "description": "Creates an international/export shipment order.",
+      "x-exampleUnavailable": true,
       "responses": {
         "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "example": {
-                  "result": "1",
-                  "message": "Success",
-                  "data": "[PLACEHOLDER — needs live verification]"
-                }
-              }
-            }
-          }
+          "description": "Successful operation",
+          "x-exampleUnavailable": true
         }
       }
     },
     "internationalRateCalculator": {
+      "summary": "Compare courier rates for an international shipment",
+      "description": "Compares international courier rates for a given destination and package.",
+      "x-exampleUnavailable": true,
       "responses": {
         "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "example": {
-                  "result": "1",
-                  "message": "Success",
-                  "data": "[PLACEHOLDER — needs live verification]"
-                }
-              }
-            }
-          }
+          "description": "Successful operation",
+          "x-exampleUnavailable": true
         }
-      },
-      "summary": "Compare courier rates for an international shipment"
-    },
-    "rateCalculator": {
-      "summary": "Compare courier rates for a shipment"
+      }
     },
     "ndrOrderAction": {
-      "summary": "Take action on a failed delivery"
-    },
-    "getOrderLabel": {
-      "summary": "Download the shipping label"
-    },
-    "getWarehouses": {
-      "summary": "List your warehouses"
-    },
-    "orderUpdateWarehouse": {
-      "summary": "Change an order's linked warehouse"
+      "summary": "Take action on a failed delivery",
+      "description": "Takes an action on an NDR shipment (reattempt, RTO, etc.)."
     }
   }
 }

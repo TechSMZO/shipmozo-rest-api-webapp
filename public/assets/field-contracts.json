@@ -2,134 +2,537 @@
   "pushOrders": {
     "title": "Push Order",
     "fields": [
-      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "Must match your own system's order ID" },
-      { "field": "order_date", "type": "string", "required": true, "values": "YYYY-MM-DD", "notes": "" },
-      { "field": "order_type", "type": "string", "required": false, "values": "ESSENTIALS, NON ESSENTIALS", "notes": "" },
-      { "field": "consignee_name", "type": "string", "required": true, "values": "—", "notes": "" },
-      { "field": "consignee_phone", "type": "number", "required": true, "values": "digits only", "notes": "" },
-      { "field": "consignee_alternate_phone", "type": "number", "required": false, "values": "digits only", "notes": "" },
-      { "field": "consignee_email", "type": "string", "required": false, "values": "—", "notes": "" },
-      { "field": "consignee_address_line_one", "type": "string", "required": true, "values": "—", "notes": "" },
-      { "field": "consignee_address_line_two", "type": "string", "required": false, "values": "—", "notes": "" },
-      { "field": "consignee_pin_code", "type": "number", "required": true, "values": "—", "notes": "" },
-      { "field": "consignee_city", "type": "string", "required": true, "values": "—", "notes": "" },
-      { "field": "consignee_state", "type": "string", "required": true, "values": "—", "notes": "" },
-      { "field": "product_detail", "type": "array", "required": true, "values": "objects: name, sku_number, quantity, discount, hsn, unit_price, product_category", "notes": "product_category is free text" },
-      { "field": "payment_type", "type": "string", "required": true, "values": "PREPAID, COD", "notes": "" },
-      { "field": "cod_amount", "type": "string", "required": false, "values": "—", "notes": "Required in practice when payment_type=COD" },
-      { "field": "weight", "type": "number", "required": true, "values": "grams", "notes": "" },
-      { "field": "length, width, height", "type": "number", "required": true, "values": "cm", "notes": "" },
-      { "field": "warehouse_id", "type": "string", "required": true, "values": "—", "notes": "From Get Warehouses / Create Warehouse" },
-      { "field": "gst_ewaybill_number, gstin_number", "type": "string", "required": false, "values": "—", "notes": "" }
+      {
+        "field": "order_id",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Must match your own system's order ID; keep unique across retries"
+      },
+      {
+        "field": "order_date",
+        "type": "string",
+        "required": true,
+        "values": "YYYY-MM-DD",
+        "notes": "Order date in YYYY-MM-DD."
+      },
+      {
+        "field": "order_type",
+        "type": "string",
+        "required": false,
+        "values": "ESSENTIALS, NON ESSENTIALS",
+        "notes": "Goods category: ESSENTIALS or NON ESSENTIALS."
+      },
+      {
+        "field": "consignee_name",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Recipient full name."
+      },
+      {
+        "field": "consignee_phone",
+        "type": "number",
+        "required": true,
+        "values": "digits only",
+        "notes": "Digits only — no spaces, dashes, or country code."
+      },
+      {
+        "field": "consignee_alternate_phone",
+        "type": "number",
+        "required": false,
+        "values": "digits only",
+        "notes": "Digits only if provided; no country code."
+      },
+      {
+        "field": "consignee_email",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Recipient email address."
+      },
+      {
+        "field": "consignee_address_line_one",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Primary delivery street address."
+      },
+      {
+        "field": "consignee_address_line_two",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Secondary address line (landmark, suite, etc.)."
+      },
+      {
+        "field": "consignee_pin_code",
+        "type": "number",
+        "required": true,
+        "values": "—",
+        "notes": "Delivery pincode."
+      },
+      {
+        "field": "consignee_city",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Delivery city."
+      },
+      {
+        "field": "consignee_state",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Delivery state."
+      },
+      {
+        "field": "product_detail",
+        "type": "array",
+        "required": true,
+        "values": "array of objects",
+        "notes": "Array of line items. Example: [{\"name\":\"T-Shirt\",\"sku_number\":\"SKU1\",\"quantity\":1,\"discount\":\"\",\"hsn\":\"6109\",\"unit_price\":499,\"product_category\":\"Apparel\"}]"
+      },
+      {
+        "field": "payment_type",
+        "type": "string",
+        "required": true,
+        "values": "PREPAID, COD",
+        "notes": "PREPAID or COD."
+      },
+      {
+        "field": "cod_amount",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Required in practice when payment_type=COD"
+      },
+      {
+        "field": "weight",
+        "type": "number",
+        "required": true,
+        "values": "grams",
+        "notes": "Shipment weight in grams."
+      },
+      {
+        "field": "length, width, height",
+        "type": "number",
+        "required": true,
+        "values": "cm",
+        "notes": "Accepted values: cm."
+      },
+      {
+        "field": "warehouse_id",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "From Get Warehouses / Create Warehouse"
+      },
+      {
+        "field": "gst_ewaybill_number, gstin_number",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "The gst ewaybill number, gstin number for this request."
+      }
     ]
   },
   "pushReturnOrder": {
     "title": "Push Return Order",
     "fields": [
-      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "" },
-      { "field": "order_date", "type": "string", "required": true, "values": "YYYY-MM-DD", "notes": "" },
-      { "field": "order_type", "type": "string", "required": false, "values": "e.g. ESSENTIALS", "notes": "" },
-      { "field": "pickup_name", "type": "string", "required": true, "values": "—", "notes": "" },
-      { "field": "pickup_phone", "type": "number", "required": true, "values": "digits only", "notes": "" },
-      { "field": "pickup_email", "type": "string", "required": false, "values": "—", "notes": "" },
-      { "field": "pickup_address_line_one", "type": "string", "required": true, "values": "—", "notes": "" },
-      { "field": "pickup_address_line_two", "type": "string", "required": false, "values": "—", "notes": "" },
-      { "field": "pickup_pin_code", "type": "number", "required": true, "values": "—", "notes": "" },
-      { "field": "pickup_city", "type": "string", "required": true, "values": "—", "notes": "" },
-      { "field": "pickup_state", "type": "string", "required": true, "values": "—", "notes": "" },
-      { "field": "product_detail", "type": "array", "required": true, "values": "same shape as Push Order", "notes": "" },
-      { "field": "payment_type", "type": "string", "required": true, "values": "PREPAID, COD", "notes": "" },
-      { "field": "weight", "type": "number", "required": true, "values": "kg", "notes": "Differs from Push Order (grams)" },
-      { "field": "length, width, height", "type": "number", "required": true, "values": "cm", "notes": "" },
-      { "field": "warehouse_id", "type": "string", "required": false, "values": "—", "notes": "" },
-      { "field": "return_reason_id", "type": "number", "required": true, "values": "from Get Return Reason", "notes": "" },
-      { "field": "customer_request", "type": "string", "required": true, "values": "e.g. REFUND", "notes": "Full enum [PLACEHOLDER]" },
-      { "field": "reason_comment", "type": "string", "required": false, "values": "—", "notes": "" }
+      {
+        "field": "order_id",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Your storefront / OMS order id — must be unique across retries."
+      },
+      {
+        "field": "order_date",
+        "type": "string",
+        "required": true,
+        "values": "YYYY-MM-DD",
+        "notes": "Use ISO date format YYYY-MM-DD"
+      },
+      {
+        "field": "order_type",
+        "type": "string",
+        "required": false,
+        "values": "e.g. ESSENTIALS",
+        "notes": "Goods category: ESSENTIALS or NON ESSENTIALS."
+      },
+      {
+        "field": "pickup_name",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "The pickup name for this request."
+      },
+      {
+        "field": "pickup_phone",
+        "type": "number",
+        "required": true,
+        "values": "digits only",
+        "notes": "Digits only — no spaces or dashes"
+      },
+      {
+        "field": "pickup_email",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "The pickup email for this request."
+      },
+      {
+        "field": "pickup_address_line_one",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "The pickup address line one for this request."
+      },
+      {
+        "field": "pickup_address_line_two",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "The pickup address line two for this request."
+      },
+      {
+        "field": "pickup_pin_code",
+        "type": "number",
+        "required": true,
+        "values": "—",
+        "notes": "The pickup pin code for this request."
+      },
+      {
+        "field": "pickup_city",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "The pickup city for this request."
+      },
+      {
+        "field": "pickup_state",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "The pickup state for this request."
+      },
+      {
+        "field": "product_detail",
+        "type": "array",
+        "required": true,
+        "values": "same shape as Push Order",
+        "notes": "Array of line items (name, sku, qty, price, etc.)."
+      },
+      {
+        "field": "payment_type",
+        "type": "string",
+        "required": true,
+        "values": "PREPAID, COD",
+        "notes": "PREPAID or COD."
+      },
+      {
+        "field": "weight",
+        "type": "number",
+        "required": true,
+        "values": "kg",
+        "notes": "Shipment weight in kg for return orders."
+      },
+      {
+        "field": "length, width, height",
+        "type": "number",
+        "required": true,
+        "values": "cm",
+        "notes": "Accepted values: cm."
+      },
+      {
+        "field": "warehouse_id",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Shipmozo warehouse id from get-warehouses / create-warehouse."
+      },
+      {
+        "field": "return_reason_id",
+        "type": "number",
+        "required": true,
+        "values": "from Get Return Reason",
+        "notes": "Id from GET /get-return-reason."
+      },
+      {
+        "field": "customer_request",
+        "type": "string",
+        "required": true,
+        "values": "e.g. REFUND",
+        "notes": "Accepted values not fully verified yet — use values from your Shipmozo panel"
+      },
+      {
+        "field": "reason_comment",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "The reason comment for this request."
+      }
     ]
   },
   "assignCourier": {
     "title": "Assign Courier",
     "fields": [
-      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "Internal order_id from Push Order response" },
-      { "field": "courier_id", "type": "number", "required": true, "values": "—", "notes": "From Rate Calculator response" }
+      {
+        "field": "order_id",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Internal order_id from Push Order response"
+      },
+      {
+        "field": "courier_id",
+        "type": "number",
+        "required": true,
+        "values": "—",
+        "notes": "From Rate Calculator response (courier id)"
+      }
     ]
   },
   "schedulePickup": {
     "title": "Schedule Pickup",
     "fields": [
-      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "Only needed if courier pickups_automatically_scheduled = NO" }
+      {
+        "field": "order_id",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Only needed if courier pickups_automatically_scheduled = NO"
+      }
     ]
   },
   "cancelOrder": {
     "title": "Cancel Order",
     "fields": [
-      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "Internal order_id" },
-      { "field": "awb_number", "type": "number", "required": true, "values": "—", "notes": "" }
+      {
+        "field": "order_id",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Internal order_id"
+      },
+      {
+        "field": "awb_number",
+        "type": "number",
+        "required": true,
+        "values": "—",
+        "notes": "Air Waybill from assign / auto-assign / schedule-pickup."
+      }
     ]
   },
   "autoCourierAssign": {
     "title": "Auto Assign Order",
     "fields": [
-      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "Requires auto-assign configured in panel Settings first" }
+      {
+        "field": "order_id",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Requires auto-assign configured in panel Settings first"
+      }
     ]
   },
   "rateCalculator": {
     "title": "Rate Calculator",
     "tip": "Tip: to check if a pincode pair is serviceable, call this endpoint — one or more couriers returned means the route is serviceable. An empty list or result \"0\" means the pincodes are not serviceable.",
     "fields": [
-      { "field": "order_id", "type": "string", "required": false, "values": "—", "notes": "Only if calculating for an existing order" },
-      { "field": "pickup_pincode", "type": "number", "required": true, "values": "—", "notes": "" },
-      { "field": "delivery_pincode", "type": "number", "required": true, "values": "—", "notes": "" },
-      { "field": "payment_type", "type": "string", "required": true, "values": "PREPAID, COD", "notes": "" },
-      { "field": "shipment_type", "type": "string", "required": true, "values": "FORWARD, RETURN", "notes": "" },
-      { "field": "order_amount", "type": "number", "required": true, "values": "—", "notes": "" },
-      { "field": "type_of_package", "type": "string", "required": true, "values": "SPS, B2B, MPS", "notes": "" },
-      { "field": "rov_type", "type": "string", "required": true, "values": "ROV_OWNER, ROV_CARRIER", "notes": "" },
-      { "field": "cod_amount", "type": "string", "required": false, "values": "—", "notes": "" },
-      { "field": "weight", "type": "number", "required": true, "values": "grams", "notes": "" },
-      { "field": "dimensions", "type": "array", "required": true, "values": "objects: no_of_box, length, width, height", "notes": "" }
+      {
+        "field": "order_id",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Only if calculating for an existing order"
+      },
+      {
+        "field": "pickup_pincode",
+        "type": "number",
+        "required": true,
+        "values": "—",
+        "notes": "The pickup pincode for this request."
+      },
+      {
+        "field": "delivery_pincode",
+        "type": "number",
+        "required": true,
+        "values": "—",
+        "notes": "The delivery pincode for this request."
+      },
+      {
+        "field": "payment_type",
+        "type": "string",
+        "required": true,
+        "values": "PREPAID, COD",
+        "notes": "PREPAID or COD."
+      },
+      {
+        "field": "shipment_type",
+        "type": "string",
+        "required": true,
+        "values": "FORWARD, RETURN",
+        "notes": "FORWARD or RETURN as accepted by this endpoint."
+      },
+      {
+        "field": "order_amount",
+        "type": "number",
+        "required": true,
+        "values": "—",
+        "notes": "The order amount for this request."
+      },
+      {
+        "field": "type_of_package",
+        "type": "string",
+        "required": true,
+        "values": "SPS, B2B, MPS",
+        "notes": "Package type enum as accepted by Shipmozo (see accepted values)."
+      },
+      {
+        "field": "rov_type",
+        "type": "string",
+        "required": true,
+        "values": "ROV_OWNER, ROV_CARRIER",
+        "notes": "Risk of value / insurance type when applicable."
+      },
+      {
+        "field": "cod_amount",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Amount to collect for COD orders (required when payment_type is COD)."
+      },
+      {
+        "field": "weight",
+        "type": "number",
+        "required": true,
+        "values": "grams",
+        "notes": "Shipment weight in grams."
+      },
+      {
+        "field": "dimensions",
+        "type": "array",
+        "required": true,
+        "values": "objects: no_of_box, length, width, height",
+        "notes": "Array of boxes, e.g. [{\"no_of_box\":1,\"length\":10,\"width\":10,\"height\":10}] with length/width/height in cm."
+      }
     ]
   },
   "createWarehouse": {
     "title": "Create Warehouse",
+    "tip": "address_title must be unique for new warehouses. Reusing an existing address_title typically returns the existing warehouse_id instead of erroring.",
     "fields": [
-      { "field": "address_title", "type": "string", "required": true, "values": "—", "notes": "Must be unique; reusing title returns existing warehouse_id" },
-      { "field": "name, phone, alternate_phone, email", "type": "—", "required": false, "values": "—", "notes": "" },
-      { "field": "address_line_one", "type": "string", "required": true, "values": "—", "notes": "" },
-      { "field": "address_line_two", "type": "string", "required": false, "values": "—", "notes": "" },
-      { "field": "pin_code", "type": "number", "required": true, "values": "—", "notes": "" }
+      {
+        "field": "address_title",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Must be unique; reusing title returns existing warehouse_id"
+      },
+      {
+        "field": "name, phone, alternate_phone, email",
+        "type": "—",
+        "required": false,
+        "values": "—",
+        "notes": "phone: digits only"
+      },
+      {
+        "field": "address_line_one",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Primary street address."
+      },
+      {
+        "field": "address_line_two",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Secondary address line."
+      },
+      {
+        "field": "pin_code",
+        "type": "number",
+        "required": true,
+        "values": "—",
+        "notes": "Pincode."
+      }
     ]
   },
   "orderUpdateWarehouse": {
     "title": "Order Update Warehouse",
     "fields": [
-      { "field": "order_id", "type": "string", "required": true, "values": "—", "notes": "" },
-      { "field": "warehouse_id", "type": "int", "required": true, "values": "—", "notes": "" }
+      {
+        "field": "order_id",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Shipmozo internal order id from push-order (not your store SKU)"
+      },
+      {
+        "field": "warehouse_id",
+        "type": "int",
+        "required": true,
+        "values": "—",
+        "notes": "Target warehouse from get-warehouses / create-warehouse"
+      }
     ]
   },
   "Login": {
     "title": "Login",
     "fields": [
-      { "field": "username", "type": "string", "required": true, "values": "—", "notes": "" },
-      { "field": "password", "type": "string", "required": true, "values": "—", "notes": "" }
+      {
+        "field": "username",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Panel email or phone"
+      },
+      {
+        "field": "password",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Shipmozo panel password."
+      }
     ]
   },
   "getOrderLabel": {
     "title": "Get Order Label",
     "fields": [
-      { "field": "awb_number", "type": "string", "required": true, "values": "path param", "notes": "From Assign Courier or Schedule Pickup" }
+      {
+        "field": "awb_number",
+        "type": "string",
+        "required": true,
+        "values": "path param",
+        "notes": "From Assign Courier or Schedule Pickup"
+      }
     ]
   },
   "trackOrder": {
     "title": "Track Order",
     "fields": [
-      { "field": "awb_number", "type": "string", "required": true, "values": "query param", "notes": "From Assign Courier or Schedule Pickup" }
+      {
+        "field": "awb_number",
+        "type": "string",
+        "required": true,
+        "values": "query param",
+        "notes": "From Assign Courier or Schedule Pickup"
+      }
     ]
   },
   "getOrderDetail": {
     "title": "Get Order Detail",
     "fields": [
-      { "field": "order_id", "type": "string", "required": true, "values": "query param", "notes": "" }
+      {
+        "field": "order_id",
+        "type": "string",
+        "required": true,
+        "values": "query param",
+        "notes": "Your storefront / OMS order id — must be unique across retries."
+      }
     ]
   },
   "internationalPushOrder": {
@@ -137,10 +540,34 @@
     "placeholder": true,
     "partialNotice": true,
     "fields": [
-      { "field": "type_of_package", "type": "string", "required": true, "values": "SPS, B2B, MPS", "notes": "" },
-      { "field": "shipment_purpose", "type": "string", "required": true, "values": "SCSB4, CSB5, DSCB4", "notes": "" },
-      { "field": "consignee_country_id", "type": "number", "required": true, "values": "from Countries API", "notes": "Do not hardcode" },
-      { "field": "currency", "type": "string", "required": true, "values": "INR (seen in examples)", "notes": "Full field list [PLACEHOLDER]" }
+      {
+        "field": "type_of_package",
+        "type": "string",
+        "required": true,
+        "values": "SPS, B2B, MPS",
+        "notes": "Package type enum as accepted by Shipmozo (see accepted values)."
+      },
+      {
+        "field": "shipment_purpose",
+        "type": "string",
+        "required": true,
+        "values": "SCSB4, CSB5, DSCB4",
+        "notes": "Accepted values: SCSB4, CSB5, DSCB4."
+      },
+      {
+        "field": "consignee_country_id",
+        "type": "number",
+        "required": true,
+        "values": "from Countries API",
+        "notes": "Do not hardcode"
+      },
+      {
+        "field": "currency",
+        "type": "string",
+        "required": true,
+        "values": "INR (seen in examples)",
+        "notes": "Full international field list not yet verified"
+      }
     ]
   },
   "internationalRateCalculator": {
@@ -174,8 +601,9 @@
   },
   "generateManifest": {
     "title": "Generate Manifest",
+    "tip": "Pass AWB numbers as a comma-separated list. A specific maximum per request is not independently verified here.",
     "placeholder": true,
-    "partialNotice": true,
+    "unavailableMessage": "Full request payload reference not yet available for Generate Manifest",
     "fields": []
   }
 }

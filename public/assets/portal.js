@@ -8,7 +8,7 @@ import {
   loadLifecycleScenarioId,
   getLifecycleWorkflow,
 } from "./workflow-tester.js?v=42";
-import { loadFieldContracts, renderFieldContract } from "./field-contract-renderer.js?v=34";
+import { loadFieldContracts, renderFieldContract } from "./field-contract-renderer.js?v=43";
 import { renderDemoPage, bindDemoPage } from "./demo-player.js?v=34";
 
 const API_BACKENDS = {
@@ -746,10 +746,52 @@ function schemaExample(schema, depth = 0) {
 
 function getResponseExample(op, status = "200") {
   const resp = op.responses?.[status];
+  if (!resp) return null;
+  if (resp["x-exampleUnavailable"] || op["x-exampleUnavailable"]) return null;
   const content = resp?.content?.["application/json"];
   if (!content) return null;
-  if (content.schema?.example) return content.schema.example;
+  if (content.example !== undefined) return content.example;
+  const named = content.examples && Object.values(content.examples)[0]?.value;
+  if (named !== undefined) return named;
+  if (content.schema?.example !== undefined) return content.schema.example;
   return schemaExample(content.schema);
+}
+
+function getFailureExample(op) {
+  if (op["x-errorExampleUnavailable"]) return null;
+  const fromOp = op["x-errorExample"];
+  if (fromOp) return fromOp;
+  for (const status of ["400", "401", "404", "422", "default"]) {
+    const ex = getResponseExample(op, status);
+    if (ex) return ex;
+  }
+  return null;
+}
+
+function renderResponseFieldList(fields) {
+  if (!fields?.length) return "";
+  return `<ul class="response-field-list">${fields
+    .map((f) => `<li><code>${esc(f.name || f.field)}</code> — ${esc(f.notes || f.description || "")}</li>`)
+    .join("")}</ul>`;
+}
+
+function renderQueryUsage(op, path, fullUrl) {
+  const custom = op["x-queryExamples"];
+  if (Array.isArray(custom) && custom.length) {
+    return `<p class="query-usage-example"><strong>Example:</strong> ${custom
+      .map((ex) => `<code>${esc(typeof ex === "string" ? `${fullUrl}${ex.startsWith("?") ? ex : `?${ex}`}` : ex)}</code>`)
+      .join(" · ")}</p>`;
+  }
+  const q = (op.parameters || []).filter((p) => (p.$ref ? false : p.in === "query") || (p.in === "query"));
+  const resolved = collectParams(op, path).filter((p) => p.in === "query");
+  if (!resolved.length) return "";
+  if (path === "/get-warehouses") {
+    return `<p class="query-usage-example"><strong>Example:</strong> <code>${esc(`${fullUrl}?page=2`)}</code> — request the next page of warehouses when you have more than 25 records.</p>`;
+  }
+  if (path === "/track-order") {
+    return `<p class="query-usage-example"><strong>Example:</strong> <code>${esc(`${fullUrl}?awb_number=YOUR_AWB`)}</code> — <code>awb_number</code> comes from Assign Courier or Schedule Pickup.</p>`;
+  }
+  return "";
 }
 
 function collectParams(op, path) {
@@ -863,7 +905,9 @@ function renderParamTable(params) {
     <tbody>
       ${params
         .map((p) => {
-          const req = p.required ? '<span class="tag-required">Required</span>' : "Optional";
+          const req = p.required
+            ? '<span class="param-required-badge">Required</span>'
+            : '<span class="param-optional-badge">Optional</span>';
           const type = p.schema?.type || p.schema?.format || "—";
           return `<tr>
             <td><code>${esc(p.name)}</code></td>
@@ -1134,23 +1178,21 @@ function renderRateLimitsPage() {
 function renderErrors() {
   const codes = portalMeta.errorCodes || [];
   return `
-    <h1 class="page-title">Error codes &amp; troubleshooting</h1>
-    <p class="page-lead">Shipmozo returns HTTP 200 with <code>result: "0"</code> for business errors. Use <code>message</code> and <code>data.error</code> for details.</p>
-    
+    <h1 class="page-title">Errors &amp; troubleshooting</h1>
+    <p class="page-lead">Shipmozo’s API returns <strong>HTTP 200</strong> even when a call fails. Check <code>result</code> (<code>"1"</code> success / <code>"0"</code> failure), then read <code>message</code> and <code>data.error</code>. The API does not return machine-readable SNAKE_CASE error codes.</p>
 
     <div class="section">
-      <h2>Error reference</h2>
+      <h2>Common failure scenarios</h2>
       <table class="error-table">
-        <thead><tr><th>Code</th><th>result</th><th>Typical message</th><th>When</th><th>Action</th></tr></thead>
+        <thead><tr><th>Typical message</th><th>result</th><th>When</th><th>What to do</th></tr></thead>
         <tbody>
           ${codes
             .map(
               (e) => `<tr>
-              <td><code>${esc(e.code)}</code></td>
-              <td>${esc(e.result)}</td>
-              <td>${esc(e.typicalMessage)}</td>
-              <td>${esc(e.when)}</td>
-              <td>${esc(e.action)}</td>
+              <td>${esc(e.typicalMessage || e.message || e.label || e.code || "")}</td>
+              <td>${esc(e.result || "0")}</td>
+              <td>${esc(e.when || "")}</td>
+              <td>${esc(e.action || "")}</td>
             </tr>`
             )
             .join("")}
@@ -1190,18 +1232,28 @@ function renderEndpoint(item) {
     delete headers["private-key"];
   }
 
-  const successEx = getResponseExample(op, "200") || {
-    result: "1",
-    message: "Success",
-    data: {},
-  };
-  const errorEx = { result: "0", message: "Error description", data: { error: "details" } };
+  const successRaw = getResponseExample(op, "200");
+  const successUnavailable = !successRaw || op["x-exampleUnavailable"] || op.responses?.["200"]?.["x-exampleUnavailable"];
+  const successEx = successUnavailable
+    ? null
+    : successRaw;
+  const failureEx = getFailureExample(op);
   const useCases = op["x-useCases"] || [];
-  const errorRefs = op["x-errors"] || [];
+  const responseFields = op["x-responseFields"] || [];
+  const failureFields = op["x-failureFields"] || [];
+  const prominentNotes = op["x-docNotes"] || [];
   const rateCalculatorTip =
     path === "/rate-calculator"
       ? `<div class="note tip"><strong>Tip:</strong> to check if a pincode pair is serviceable, call this endpoint — one or more couriers returned means the route is serviceable. An empty list or <code>result: "0"</code> means not serviceable.</div>`
       : "";
+
+  const successBlock = successEx
+    ? `<div class="code-block-wrap"><pre><code>${esc(JSON.stringify(successEx, null, 2))}</code></pre></div>${renderResponseFieldList(responseFields)}`
+    : `<p class="note warn" data-docs-unverified="response">Example response not yet available for this endpoint.</p>${renderResponseFieldList(responseFields)}`;
+
+  const failureBlock = failureEx
+    ? `<div class="code-block-wrap"><pre><code>${esc(JSON.stringify(failureEx, null, 2))}</code></pre></div>${renderResponseFieldList(failureFields)}`
+    : `<p class="note warn" data-docs-unverified="error-example">A verified failure example is not yet available for this endpoint. On failure the API still returns HTTP 200 with <code>result: "0"</code> — read <code>message</code> and <code>data.error</code>.</p>`;
 
   return `
     <article class="endpoint-header">
@@ -1223,6 +1275,8 @@ function renderEndpoint(item) {
         <code>${esc(fullUrl)}</code>
       </div>
 
+      ${prominentNotes.map((n) => `<div class="note tip"><strong>Note:</strong> ${esc(n)}</div>`).join("")}
+
       <div class="endpoint-doc-columns">
         <div class="endpoint-doc-request">
           ${rateCalculatorTip}
@@ -1240,14 +1294,15 @@ function renderEndpoint(item) {
                 ? params.filter((p) => p.in === "header")
                 : needsAuth(op)
                   ? [
-                      { name: "public-key", in: "header", required: true, schema: { type: "string" }, description: "API public key" },
-                      { name: "private-key", in: "header", required: true, schema: { type: "string" }, description: "API private key" },
+                      { name: "public-key", in: "header", required: true, schema: { type: "string" }, description: "API public key from Shipmozo panel Profile, or from POST /login" },
+                      { name: "private-key", in: "header", required: true, schema: { type: "string" }, description: "API private key from Shipmozo panel Profile, or from POST /login. Invalid or expired keys typically return unauthorised access." },
                       { name: "Content-Type", in: "header", required: method !== "GET", schema: { type: "string" }, description: "application/json for POST bodies" },
                     ]
                   : [{ name: "Content-Type", in: "header", required: false, schema: { type: "string" }, description: "application/json when sending body" }]
             )}
             <h3>Path &amp; query</h3>
             ${renderParamTable(params.filter((p) => p.in === "path" || p.in === "query"))}
+            ${renderQueryUsage(op, path, fullUrl)}
             ${
               bodyExample
                 ? `<h3>Body example</h3>${renderCodeTabs(
@@ -1259,27 +1314,99 @@ function renderEndpoint(item) {
             }
           </div>
 
-          ${renderFieldContract(op.operationId, fieldContracts)}
+          ${renderFieldContract(op.operationId, fieldContracts, { method, noBody: !op.requestBody })}
         </div>
 
         <aside class="endpoint-doc-responses">
           <div class="section">
             <h2>Responses</h2>
+            <p class="note endpoint-doc-http-note"><strong>Always HTTP 200.</strong> Shipmozo signals success/failure with <code>result: "1"</code> or <code>result: "0"</code> — not with HTTP 4xx/5xx status codes.</p>
             <h3><span class="status-pill status-2xx">result: 1</span> Success</h3>
-            <div class="code-block-wrap"><pre><code>${esc(JSON.stringify(successEx, null, 2))}</code></pre></div>
+            ${successBlock}
             <h3><span class="status-pill status-4xx">result: 0</span> Failure</h3>
-            <div class="code-block-wrap"><pre><code>${esc(JSON.stringify(errorEx, null, 2))}</code></pre></div>
-            ${
-              errorRefs.length
-                ? `<p>Common errors: ${errorRefs.map((c) => `<a href="#/errors">${esc(c)}</a>`).join(", ")}</p>`
-                : ""
-            }
+            ${failureBlock}
           </div>
         </aside>
       </div>
 
-      <p style="margin-top:24px"><a href="#/execute?op=${encodeURIComponent(item.id)}" class="btn-primary inline-btn">Test this API →</a></p>
+      <div class="doc-test-row">
+        <button type="button" class="btn-primary inline-btn" data-doc-test-op="${esc(item.id)}">Test this API →</button>
+        <span class="doc-test-status" data-doc-test-status hidden></span>
+      </div>
     </article>`;
+}
+
+function bindDocTestButton(root, item) {
+  const btn = root.querySelector("[data-doc-test-op]");
+  const statusEl = root.querySelector("[data-doc-test-status]");
+  if (!btn || !statusEl) return;
+
+  btn.addEventListener("click", async () => {
+    const { method, path, op } = item;
+    const needsKeys = needsAuth(op);
+    if (needsKeys && !isEnvConnected(backendEnv)) {
+      statusEl.hidden = false;
+      statusEl.className = "doc-test-status is-err";
+      statusEl.textContent = "Connect API keys first, then try again — or open the full API Tester.";
+      return;
+    }
+
+    btn.disabled = true;
+    statusEl.hidden = false;
+    statusEl.className = "doc-test-status is-loading";
+    statusEl.textContent = "Running request…";
+
+    try {
+      const body = method === "GET" || method === "DELETE" ? undefined : getRequestExample(op) || undefined;
+      let reqPath = path;
+      if (path.includes("{")) {
+        const params = collectParams(op, path);
+        params
+          .filter((p) => p.in === "path")
+          .forEach((p) => {
+            const sample = p.example || p.schema?.example || "SAMPLE";
+            reqPath = reqPath.replace(`{${p.name}}`, encodeURIComponent(String(sample)));
+          });
+      }
+      const queryParams = collectParams(op, path).filter((p) => p.in === "query");
+      if (queryParams.length && !reqPath.includes("?")) {
+        const qs = queryParams
+          .map((p) => `${encodeURIComponent(p.name)}=${encodeURIComponent(String(p.example || p.schema?.example || "SAMPLE"))}`)
+          .join("&");
+        // Prefer documented example for track-order
+        if (path === "/track-order") {
+          reqPath = `${path}?awb_number=SAMPLE`;
+        } else if (path === "/get-warehouses") {
+          reqPath = path; // list without page is valid
+        } else {
+          reqPath = `${reqPath}?${qs}`;
+        }
+      }
+
+      const wrapped = await proxyRequest({
+        method,
+        path: reqPath,
+        headers: {
+          ...authHeaders(),
+          ...(body ? { "Content-Type": "application/json" } : {}),
+        },
+        body,
+      });
+
+      // If we need query params, include them in path for proxy
+      const hint = interpretShipmozoResponse(wrapped?.data || wrapped);
+      const ok = hint?.type === "ok" || wrapped?.data?.result === "1" || wrapped?.data?.result === 1;
+      statusEl.className = `doc-test-status ${ok ? "is-ok" : "is-err"}`;
+      statusEl.textContent = ok
+        ? `${hint?.title || "Success"} — open API Tester for the full response.`
+        : `${hint?.title || "Failed"} — ${hint?.text || "See message / data.error in API Tester."}`;
+    } catch (err) {
+      statusEl.className = "doc-test-status is-err";
+      statusEl.textContent = `Request failed: ${err.message || err}`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
 
 const JOURNEY_STORAGE = "shipmozo_portal_journey_v1";
@@ -2353,6 +2480,7 @@ async function route() {
     if (item) {
       main.innerHTML = renderEndpoint(item);
       bindCodeTabs(main);
+      bindDocTestButton(main, item);
       return;
     }
   }

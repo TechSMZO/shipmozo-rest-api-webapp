@@ -26,18 +26,16 @@ export const GLOBAL = {
     description:
       'Every response uses `{ "result": "1"|"0", "message": string, "data": object|array }`. HTTP status is often 200 even on business failure — always check `result`.',
   },
+  // Message-focused scenarios only — Shipmozo does not return SNAKE_CASE machine codes.
   errorCodes: [
-    { code: 'result="0"', http: "200", meaning: "Business/validation failure", action: "Read message and data.error; fix request and retry" },
-    { code: "AUTH_KEYS_MISSING", http: "401", meaning: "public-key or private-key header absent", action: "Login via /login or paste keys from panel profile" },
-    { code: "AUTH_KEYS_INVALID", http: "401", meaning: "Keys rejected", action: "Regenerate keys in panel; update stored credentials" },
-    { code: "ORDER_NOT_FOUND", http: "200", meaning: "order_id unknown", action: "Push order first; verify order_id matches your store" },
-    { code: "ORDER_ALREADY_ASSIGNED", http: "200", meaning: "Courier already assigned", action: "Use track-order or cancel before re-assign" },
-    { code: "AUTO_ASSIGN_NOT_CONFIGURED", http: "200", meaning: "Panel auto-assign not set", action: 'Enable Settings → Auto assign or use assign-courier' },
-    { code: "PICKUP_AUTO_SCHEDULED", http: "200", meaning: "Manual schedule-pickup not needed", action: "Skip schedule-pickup when rate-calculator returns pickups_automatically_scheduled=YES" },
-    { code: "PINCODE_NOT_SERVICEABLE", http: "200", meaning: "Lane not serviceable", action: "Call rate-calculator — empty courier list means not serviceable" },
-    { code: "WAREHOUSE_REQUIRED", http: "200", meaning: "Invalid/missing warehouse_id", action: "create-warehouse or get-warehouses" },
-    { code: "CORS_TRAILING_SLASH", http: "—", meaning: "Base URL has trailing /", action: "Use https://appiify.com/app/api/v1 without trailing slash" },
-    { code: "RATE_LIMIT", http: "429", meaning: "Too many requests", action: "Exponential backoff; honor Retry-After if present" },
+    { typicalMessage: 'result="0" with message / data.error', result: "0", when: "Business or validation failure", action: "Read message and data.error; fix request and retry" },
+    { typicalMessage: "unauthorised user access / Invalid API credentials", result: "0", when: "Missing or invalid public-key / private-key", action: "Login via /login or paste keys from panel profile" },
+    { typicalMessage: "Order not found", result: "0", when: "order_id unknown", action: "Push order first; use Shipmozo internal order_id" },
+    { typicalMessage: "please setup auto assign", result: "0", when: "Panel auto-assign not configured", action: "Enable Settings → Auto assign or use assign-courier" },
+    { typicalMessage: "The selected warehouse id is invalid.", result: "0", when: "Invalid warehouse_id on push-order", action: "create-warehouse or get-warehouses" },
+    { typicalMessage: "Empty courier list / result 0", result: "0", when: "Lane not serviceable", action: "Try different pincodes in rate-calculator" },
+    { typicalMessage: "Browser CORS error", result: "—", when: "Base URL has trailing / after /v1", action: "Use https://appiify.com/app/api/v1 without trailing slash" },
+    { typicalMessage: "Rate limit exceeded (or HTTP 429)", result: "0", when: "Too many requests", action: "Exponential backoff; honor Retry-After if present" },
   ],
   workflows: [
     {
@@ -168,7 +166,7 @@ export const ENDPOINTS = {
   },
   getOrderLabel: {
     rateLimit: "500 (shared quota)",
-    useCases: ["Print shipping label", "Pass ?type_of_label=PDF for PDF format"],
+    useCases: ["Print shipping label as base64 PNG after courier assign"],
     errors: [{ when: "AWB not generated", message: "Label not available", fix: "Complete assign-courier first" }],
   },
   rateCalculator: {
@@ -209,9 +207,10 @@ export const ENDPOINTS = {
     errors: [{ when: "Unknown order_id", message: "Order not found", fix: "Verify order_id" }],
   },
   generateManifest: {
-    rateLimit: "500 (shared quota; max 25 AWBs per call)",
+    rateLimit: "500 (shared quota)",
     useCases: ["Bulk handover manifest for courier pickup"],
-    errors: [{ when: ">25 AWBs", message: "Limit exceeded", fix: "Split into batches of 25" }],
+    errors: [{ when: "Unknown AWB", message: "Not independently verified in this portal", fix: "Confirm AWBs from assign / schedule-pickup" }],
+    notes: ["awb_numbers supports comma-separated values; a specific max count is not independently verified here"],
   },
   getAllNdrShipments: {
     rateLimit: "500 (shared quota)",
