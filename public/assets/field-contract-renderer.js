@@ -18,13 +18,31 @@ function renderTip(entry) {
   return `<p class="note tip field-contract-tip">${esc(entry.tip)}</p>`;
 }
 
-export function renderFieldContract(operationId, contracts) {
+function requiredBadge(required) {
+  return required
+    ? `<span class="param-required-badge">Required</span>`
+    : `<span class="param-optional-badge">Optional</span>`;
+}
+
+/** Public copy when content is not ready — never render raw [PLACEHOLDER …] markers. */
+export function unavailableCopy(kind = "example") {
+  if (kind === "payload") {
+    return "Full request payload reference not yet available for this endpoint.";
+  }
+  if (kind === "response") {
+    return "Example response not yet available for this endpoint.";
+  }
+  return "Documentation for this section is not yet available.";
+}
+
+export function renderFieldContract(operationId, contracts, options = {}) {
   const entry = contracts?.[operationId];
   if (!entry) {
+    const noBody = options.method === "GET" || options.noBody;
     return `
-      <div class="field-contract-section">
+      <div class="field-contract-section"${noBody ? "" : ' data-docs-unverified="payload"'}>
         <h2>Request Payload Reference</h2>
-        <p class="muted">Not yet documented for this endpoint.</p>
+        <p class="muted">${esc(noBody ? "This API does not require a request payload." : unavailableCopy("payload"))}</p>
       </div>`;
   }
 
@@ -32,16 +50,17 @@ export function renderFieldContract(operationId, contracts) {
     return `
       <div class="field-contract-section">
         <h2>Request Payload Reference</h2>
-        <p class="note warn">NDR Action request payload reference is explicitly deferred — values not yet provided.</p>
+        <p class="note warn">NDR Action request payload reference is deferred until verified values are available.</p>
       </div>`;
   }
 
+  // Internal: entry.placeholder marks unverified content for engineering — never show bracket markers.
   if (entry.placeholder && (!entry.fields || !entry.fields.length)) {
     return `
-      <div class="field-contract-section">
+      <div class="field-contract-section" data-docs-unverified="payload">
         <h2>Request Payload Reference</h2>
         ${renderTip(entry)}
-        <p class="note warn"><strong>[PLACEHOLDER — entire table]</strong> Full request payload reference not yet available for ${esc(entry.title || operationId)}.</p>
+        <p class="note warn">${esc(entry.unavailableMessage || unavailableCopy("payload"))}</p>
       </div>`;
   }
 
@@ -55,7 +74,7 @@ export function renderFieldContract(operationId, contracts) {
       <tr>
         <td><code>${esc(f.field)}</code></td>
         <td>${esc(f.type)}</td>
-        <td>${f.required ? "Yes" : "No"}</td>
+        <td>${requiredBadge(!!f.required)}</td>
         <td>${esc(f.values || "—")}</td>
         <td>${esc(f.notes || "")}</td>
       </tr>`
