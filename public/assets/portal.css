@@ -405,6 +405,12 @@ body.sidebar-collapsed .sidebar {
   max-width: 880px;
 }
 
+/* Two-column endpoint docs need more width than the reading column */
+.main:has(.endpoint-doc-columns),
+.main:has(.tester-grid) {
+  max-width: 1240px;
+}
+
 .loading {
   display: flex;
   flex-direction: column;
@@ -651,6 +657,7 @@ tr:last-child td { border-bottom: none; }
 
 .code-tab-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 0;
   background: #f8fafc;
   border-bottom: 1px solid var(--border);
@@ -1491,11 +1498,82 @@ body.modal-open {
   margin: 0 0 12px;
 }
 
-/* Field contract / Request Payload Reference tables */
-.field-contract-section { margin-top: 28px; }
+/* Field contract / Request Payload Reference tables — full width below Request|Responses */
+.field-contract-section {
+  margin-top: 24px;
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden; /* table stays in container; Notes wrap instead of widening */
+}
 .field-contract-section h2 { font-size: 18px; margin-bottom: 12px; }
-.field-contract-table { width: 100%; font-size: 13px; }
+.field-contract-table {
+  width: 100%;
+  max-width: 100%;
+  font-size: 13px;
+  /* Fixed layout keeps columns inside the section — Notes wrap, no horizontal scroll */
+  table-layout: fixed;
+}
 .field-contract-table th { text-align: left; background: #f8fafc; }
+.field-contract-table th,
+.field-contract-table td {
+  overflow-wrap: break-word;
+  word-break: normal;
+  vertical-align: top;
+}
+.field-contract-table th:nth-child(1),
+.field-contract-table td:nth-child(1) { width: 14%; }
+.field-contract-table th:nth-child(2),
+.field-contract-table td:nth-child(2) { width: 9%; }
+.field-contract-table th:nth-child(3),
+.field-contract-table td:nth-child(3) { width: 10%; }
+.field-contract-table th:nth-child(4),
+.field-contract-table td:nth-child(4) { width: 18%; }
+.field-contract-table th:nth-child(5),
+.field-contract-table td:nth-child(5) { width: 49%; }
+.field-contract-table td:nth-child(1),
+.field-contract-table td:nth-child(2),
+.field-contract-table td:nth-child(3),
+.field-contract-table th:nth-child(1),
+.field-contract-table th:nth-child(2),
+.field-contract-table th:nth-child(3) {
+  white-space: nowrap;
+}
+/* Name/Type/Required stay single-line; Values + Notes wrap */
+.field-contract-table th:nth-child(4),
+.field-contract-table td:nth-child(4),
+.field-contract-table th:nth-child(5),
+.field-contract-table td:nth-child(5) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.field-contract-table td:nth-child(1) code {
+  white-space: nowrap;
+}
+/* Long JSON examples inside Notes — wrap inside the cell, never widen the table */
+.field-contract-note-json {
+  display: block;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow-x: hidden;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
 .field-contract-details { margin: 12px 0; }
 .field-contract-details summary { cursor: pointer; font-weight: 600; font-size: 13px; padding: 8px 0; }
 .field-contract-tip,
@@ -1512,65 +1590,100 @@ body.modal-open {
 
 .endpoint-doc-columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /* Prefer a slightly wider Request column so header param tables stay readable */
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
   gap: 28px;
-  align-items: stretch;
+  align-items: start;
   margin-top: 20px;
+  width: 100%;
 }
 .endpoint-doc-request,
 .endpoint-doc-responses {
   min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
+  /* Keep wide tables/code inside the column so they cannot paint under the sibling */
+  overflow-x: auto;
 }
 .endpoint-doc-request .section,
 .endpoint-doc-responses .section {
-  flex: 1;
   margin-top: 0;
   padding: 18px 20px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: var(--shadow);
+  /* Non-sticky: sticky + opaque cards covered overflowing request tables at common widths/zooms */
+  position: static;
 }
 .endpoint-doc-request .section > h2:first-child,
 .endpoint-doc-responses .section > h2:first-child {
   margin-top: 0;
 }
-.endpoint-doc-request .field-contract-section {
-  margin-top: 24px;
-  padding: 18px 20px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+
+/* Param / response tables: auto layout so Name/Required aren't crushed */
+.endpoint-doc-request table,
+.endpoint-doc-responses table,
+.param-table {
+  table-layout: auto;
+  width: 100%;
 }
-.endpoint-doc-responses .section {
-  margin-top: 0;
-  position: sticky;
-  top: 72px;
+.endpoint-doc-request th,
+.endpoint-doc-request td,
+.endpoint-doc-responses th,
+.endpoint-doc-responses td {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.param-table th,
+.param-table td {
+  padding: 10px 12px;
+  vertical-align: top;
+}
+.param-col-name,
+.param-col-in,
+.param-col-type,
+.param-col-required,
+.param-table th:nth-child(1),
+.param-table th:nth-child(2),
+.param-table th:nth-child(3),
+.param-table th:nth-child(4) {
+  white-space: nowrap;
+}
+.param-col-name code,
+.param-table td.param-col-name code {
+  white-space: nowrap;
+}
+.param-col-desc {
+  overflow-wrap: break-word;
+  word-break: normal;
+  /* Description may wrap at word boundaries; never mid-token */
+  min-width: 8rem;
 }
 .endpoint-doc-http-note {
   margin: 0 0 14px;
   font-size: 13px;
   line-height: 1.45;
 }
-.param-required-badge {
+.param-required-badge,
+.param-optional-badge {
   display: inline-block;
+  white-space: nowrap;
   font-size: 11px;
-  font-weight: 700;
   padding: 2px 8px;
   border-radius: 999px;
+}
+.param-required-badge {
+  font-weight: 700;
   background: #dcfce7;
   color: #166534;
 }
 .param-optional-badge {
-  display: inline-block;
-  font-size: 11px;
   font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
   background: #f1f5f9;
-  color: #64748b;
+  /* #475569 on #f1f5f9 ≈ 6.9:1 — meets WCAG AA 4.5:1 at 11px */
+  color: #475569;
 }
 .query-usage-example {
   margin: 10px 0 0;
@@ -1581,20 +1694,23 @@ body.modal-open {
   font-size: 12px;
   color: var(--text);
 }
-.doc-test-row {
-  margin-top: 24px;
+.endpoint-title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin-bottom: 8px;
 }
-.doc-test-status {
-  font-size: 13px;
-  font-weight: 600;
+.endpoint-title-row h1 {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 }
-.doc-test-status.is-loading { color: var(--muted); }
-.doc-test-status.is-ok { color: #166534; }
-.doc-test-status.is-err { color: #b91c1c; }
+.endpoint-title-row .inline-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 .response-field-list {
   margin: 10px 0 18px;
   padding-left: 18px;
@@ -1605,9 +1721,8 @@ body.modal-open {
 .response-field-list li { margin: 4px 0; }
 .response-field-list code { font-size: 12px; }
 
-@media (max-width: 960px) {
+@media (max-width: 1100px) {
   .endpoint-doc-columns { grid-template-columns: 1fr; }
-  .endpoint-doc-responses .section { position: static; }
 }
 
 /* Demo mode */
