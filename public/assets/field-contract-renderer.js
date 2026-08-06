@@ -24,6 +24,17 @@ function requiredBadge(required) {
     : `<span class="param-optional-badge">Optional</span>`;
 }
 
+/** Wrap long inline JSON in Notes so it wraps inside the cell instead of widening the table. */
+function formatNotes(notes) {
+  if (!notes) return "";
+  const match = String(notes).match(/^(.*?)(\[[\s\S]*\]|\{[\s\S]*\})(.*)$/);
+  if (match && match[2].length >= 40) {
+    const [, before, json, after] = match;
+    return `${esc(before)}<pre class="field-contract-note-json">${esc(json)}</pre>${esc(after)}`;
+  }
+  return esc(notes);
+}
+
 /** Public copy when content is not ready — never render raw [PLACEHOLDER …] markers. */
 export function unavailableCopy(kind = "example") {
   if (kind === "payload") {
@@ -76,7 +87,7 @@ export function renderFieldContract(operationId, contracts, options = {}) {
         <td>${esc(f.type)}</td>
         <td>${requiredBadge(!!f.required)}</td>
         <td>${esc(f.values || "—")}</td>
-        <td>${esc(f.notes || "")}</td>
+        <td class="field-contract-notes">${formatNotes(f.notes || "")}</td>
       </tr>`
     )
     .join("");

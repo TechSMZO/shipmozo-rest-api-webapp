@@ -8,7 +8,7 @@ import {
   loadLifecycleScenarioId,
   getLifecycleWorkflow,
 } from "./workflow-tester.js?v=42";
-import { loadFieldContracts, renderFieldContract } from "./field-contract-renderer.js?v=43";
+import { loadFieldContracts, renderFieldContract } from "./field-contract-renderer.js?v=44";
 import { renderDemoPage, bindDemoPage } from "./demo-player.js?v=34";
 
 const API_BACKENDS = {
@@ -21,7 +21,6 @@ const SIDEBAR_STORAGE = "shipmozo_sidebar_collapsed";
 /** Static file works even when a generic static server is used; /api/spec.json needs node server.js */
 const POSTMAN_ASSETS = {
   collection: "/assets/shipmozo.postman_collection.json",
-  environment: "/assets/shipmozo.postman_environment.live.json",
 };
 
 /** Silent internal path: /dev uses the Dev API host. No Dig/Live switch in the UI. */
@@ -56,12 +55,6 @@ function redirectMistakenDevHash() {
   return true;
 }
 
-function currentPostmanEnvAsset() {
-  return isDevPortalPath()
-    ? "/assets/shipmozo.postman_environment.dev.json"
-    : POSTMAN_ASSETS.environment;
-}
-
 /** Active-env badge / toast label (Dig shows Dev connected). */
 function getConnectedLabel(pending = false) {
   if (isDevPortalPath()) return pending ? "Dev connected · Pending" : "Dev connected";
@@ -76,26 +69,20 @@ function applyPortalMode() {
   syncJourneyFromAuth();
 }
 
-function currentPostmanEnvDownloadName() {
-  return "shipmozo.postman_environment.json";
-}
-
 function renderPostmanActions(compact = false) {
   if (compact) {
     return `
-      <a href="${esc(POSTMAN_ASSETS.collection)}" download="shipmozo.postman_collection.json" class="btn-secondary postman-btn">Postman collection</a>
-      <a href="${esc(currentPostmanEnvAsset())}" download="${esc(currentPostmanEnvDownloadName())}" class="btn-secondary postman-btn" title="Download Postman environment">Postman environment</a>`;
+      <a href="${esc(POSTMAN_ASSETS.collection)}" download="shipmozo.postman_collection.json" class="btn-secondary postman-btn">Postman collection</a>`;
   }
   return `
     <div class="section postman-section">
       <h2>Postman</h2>
-      <p class="page-lead">Download the Shipmozo API collection and environment, then import in Postman: <strong>Import → Upload Files</strong>.</p>
+      <p class="page-lead">Download the Shipmozo API collection, then import in Postman: <strong>Import → Upload Files</strong>.</p>
       <div class="hero-actions postman-actions">
         <a href="${esc(POSTMAN_ASSETS.collection)}" download="shipmozo.postman_collection.json" class="btn-primary postman-btn">Download collection</a>
-        <a href="${esc(currentPostmanEnvAsset())}" download="${esc(currentPostmanEnvDownloadName())}" class="btn-secondary">Download environment</a>
       </div>
       <div class="note" style="margin-top:12px">
-        <strong>Setup:</strong> Import both files in Postman, select the Shipmozo environment, set <code>public-key</code> and <code>private-key</code>, then send requests.
+        <strong>Setup:</strong> Import the collection in Postman, set collection variables <code>public-key</code> and <code>private-key</code>, then send requests.
       </div>
     </div>`;
 }
@@ -712,13 +699,26 @@ function schemaFromProperties(props) {
   if (!props) return null;
   const o = {};
   for (const [k, v] of Object.entries(props)) {
-    if (v.default !== undefined && v.default !== "") o[k] = v.default;
-    else if (v.example !== undefined) o[k] = v.example;
-    else if (v.type === "array") o[k] = v.example || [];
-    else if (v.type === "number") o[k] = 0;
+    const prop = v?.$ref ? resolveRef(v.$ref) || v : v;
+    if (!prop || typeof prop !== "object") {
+      o[k] = "";
+      continue;
+    }
+    if (prop.default !== undefined && prop.default !== "") o[k] = prop.default;
+    else if (prop.example !== undefined) o[k] = prop.example;
+    else if (prop.type === "array") {
+      if (prop.example !== undefined) o[k] = prop.example;
+      else if (prop.items) {
+        const item = schemaExample(prop.items, 1);
+        o[k] = item == null ? [] : [item];
+      } else o[k] = [];
+    } else if (prop.properties) o[k] = schemaFromProperties(prop.properties);
+    else if (prop.type === "integer" || prop.type === "number") o[k] = 0;
+    else if (prop.type === "boolean") o[k] = true;
+    else if (prop.default !== undefined) o[k] = prop.default;
     else o[k] = "";
   }
-  return o;
+  return Object.keys(o).length ? o : null;
 }
 
 function getRequestExample(op) {
@@ -729,7 +729,10 @@ function getRequestExample(op) {
   if (ex) return ex;
   const schema = content.schema?.$ref ? resolveRef(content.schema.$ref) : content.schema;
   if (schema?.example !== undefined) return schema.example;
-  if (schema?.properties) return schemaFromProperties(schema.properties);
+  if (schema?.properties) {
+    const fromProps = schemaFromProperties(schema.properties);
+    if (fromProps) return fromProps;
+  }
   return schemaExample(schema);
 }
 
@@ -823,23 +826,29 @@ function maskHeaderValue(name, value) {
   return `${value.slice(0, 3)}••••`;
 }
 
+function formatRequestJson(body) {
+  return JSON.stringify(body, null, 2);
+}
+
 function buildCurl(method, url, headers, body) {
   let s = `curl -X ${method} "${url}"`;
   for (const [k, v] of Object.entries(headers)) {
     if (v) s += ` \\\n  -H "${k}: ${maskHeaderValue(k, v)}"`;
   }
-  if (body)
-    s += ` \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify(body).replace(/'/g, "'\\''")}'`;
+  if (body != null) {
+    const json = formatRequestJson(body).replace(/'/g, "'\\''");
+    s += ` \\\n  -H "Content-Type: application/json" \\\n  --data-raw '${json}'`;
+  }
   return s;
 }
 
 function buildNode(method, url, headers, body) {
   const opts = { method, headers: { ...headers, Accept: "application/json" } };
-  if (body) {
+  if (body != null) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = "JSON.stringify(payload)";
   }
-  return `const payload = ${JSON.stringify(body || {}, null, 2)};
+  return `const payload = ${formatRequestJson(body ?? {})};
 const res = await fetch("${url}", ${JSON.stringify(opts, null, 2).replace('"JSON.stringify(payload)"', "JSON.stringify(payload)")});
 const data = await res.json();
 console.log(data);`;
@@ -847,19 +856,19 @@ console.log(data);`;
 
 function buildPython(method, url, headers, body) {
   const h = JSON.stringify(headers, null, 4);
-  if (body) {
-    return `import requests\n\npayload = ${JSON.stringify(body, null, 4)}\nheaders = ${h}\nr = requests.${method.toLowerCase()}("${url}", json=payload, headers=headers)\nprint(r.status_code, r.json())`;
+  if (body != null) {
+    return `import requests\n\npayload = ${formatRequestJson(body)}\nheaders = ${h}\nr = requests.${method.toLowerCase()}("${url}", json=payload, headers=headers)\nprint(r.status_code, r.json())`;
   }
   return `import requests\n\nheaders = ${h}\nr = requests.${method.toLowerCase()}("${url}", headers=headers)\nprint(r.status_code, r.json())`;
 }
 
-function renderCodeTabs(curl, node, python) {
+function renderCodeTabs(curl, node, python, jsonBody = null) {
   const id = "code-" + Math.random().toString(36).slice(2, 9);
-  const tabs = [
-    ["cURL", curl],
-    ["Node.js", node],
-    ["Python", python],
-  ];
+  const tabs = [];
+  if (jsonBody != null) {
+    tabs.push(["JSON", typeof jsonBody === "string" ? jsonBody : formatRequestJson(jsonBody)]);
+  }
+  tabs.push(["cURL", curl], ["Node.js", node], ["Python", python]);
   return `
     <div class="code-tabs" data-tabs="${id}">
       <div class="code-tab-bar">
@@ -900,7 +909,7 @@ function bindCodeTabs(root) {
 
 function renderParamTable(params) {
   if (!params.length) return "<p class='muted'>No parameters.</p>";
-  return `<table>
+  return `<table class="param-table">
     <thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
     <tbody>
       ${params
@@ -910,11 +919,11 @@ function renderParamTable(params) {
             : '<span class="param-optional-badge">Optional</span>';
           const type = p.schema?.type || p.schema?.format || "—";
           return `<tr>
-            <td><code>${esc(p.name)}</code></td>
-            <td>${esc(p.in)}</td>
-            <td>${esc(String(type))}</td>
-            <td>${req}</td>
-            <td>${esc(p.description || "")}</td>
+            <td class="param-col-name"><code>${esc(p.name)}</code></td>
+            <td class="param-col-in">${esc(p.in)}</td>
+            <td class="param-col-type">${esc(String(type))}</td>
+            <td class="param-col-required">${req}</td>
+            <td class="param-col-desc">${esc(p.description || "")}</td>
           </tr>`;
         })
         .join("")}
@@ -1056,7 +1065,8 @@ function renderAuthPage() {
       ${renderCodeTabs(
         buildCurl("POST", `${getApiBase()}/login`, {}, { username: "your_username", password: "your_password" }),
         buildNode("POST", `${getApiBase()}/login`, {}, { username: "your_username", password: "your_password" }),
-        buildPython("POST", `${getApiBase()}/login`, {}, { username: "your_username", password: "your_password" })
+        buildPython("POST", `${getApiBase()}/login`, {}, { username: "your_username", password: "your_password" }),
+        { username: "your_username", password: "your_password" }
       )}
       <p>Success response includes <code>public_key</code> and <code>private_key</code> inside <code>data[0]</code>.</p>
     </div>
@@ -1258,7 +1268,10 @@ function renderEndpoint(item) {
   return `
     <article class="endpoint-header">
       <p class="tag-line">${esc(item.tag)}</p>
-      <h1>${esc(op.summary || path)}</h1>
+      <div class="endpoint-title-row">
+        <h1>${esc(op.summary || path)}</h1>
+        <a href="#/execute?op=${encodeURIComponent(item.id)}" class="btn-primary inline-btn">Test this API →</a>
+      </div>
       <p class="lead-muted">${esc(op.description || "")}</p>
 
       <div class="endpoint-url">
@@ -1308,13 +1321,12 @@ function renderEndpoint(item) {
                 ? `<h3>Body example</h3>${renderCodeTabs(
                     buildCurl(method, fullUrl, headers, bodyExample),
                     buildNode(method, fullUrl, headers, bodyExample),
-                    buildPython(method, fullUrl, headers, bodyExample)
+                    buildPython(method, fullUrl, headers, bodyExample),
+                    bodyExample
                   )}`
                 : ""
             }
           </div>
-
-          ${renderFieldContract(op.operationId, fieldContracts, { method, noBody: !op.requestBody })}
         </div>
 
         <aside class="endpoint-doc-responses">
@@ -1329,84 +1341,8 @@ function renderEndpoint(item) {
         </aside>
       </div>
 
-      <div class="doc-test-row">
-        <button type="button" class="btn-primary inline-btn" data-doc-test-op="${esc(item.id)}">Test this API →</button>
-        <span class="doc-test-status" data-doc-test-status hidden></span>
-      </div>
+      ${renderFieldContract(op.operationId, fieldContracts, { method, noBody: !op.requestBody })}
     </article>`;
-}
-
-function bindDocTestButton(root, item) {
-  const btn = root.querySelector("[data-doc-test-op]");
-  const statusEl = root.querySelector("[data-doc-test-status]");
-  if (!btn || !statusEl) return;
-
-  btn.addEventListener("click", async () => {
-    const { method, path, op } = item;
-    const needsKeys = needsAuth(op);
-    if (needsKeys && !isEnvConnected(backendEnv)) {
-      statusEl.hidden = false;
-      statusEl.className = "doc-test-status is-err";
-      statusEl.textContent = "Connect API keys first, then try again — or open the full API Tester.";
-      return;
-    }
-
-    btn.disabled = true;
-    statusEl.hidden = false;
-    statusEl.className = "doc-test-status is-loading";
-    statusEl.textContent = "Running request…";
-
-    try {
-      const body = method === "GET" || method === "DELETE" ? undefined : getRequestExample(op) || undefined;
-      let reqPath = path;
-      if (path.includes("{")) {
-        const params = collectParams(op, path);
-        params
-          .filter((p) => p.in === "path")
-          .forEach((p) => {
-            const sample = p.example || p.schema?.example || "SAMPLE";
-            reqPath = reqPath.replace(`{${p.name}}`, encodeURIComponent(String(sample)));
-          });
-      }
-      const queryParams = collectParams(op, path).filter((p) => p.in === "query");
-      if (queryParams.length && !reqPath.includes("?")) {
-        const qs = queryParams
-          .map((p) => `${encodeURIComponent(p.name)}=${encodeURIComponent(String(p.example || p.schema?.example || "SAMPLE"))}`)
-          .join("&");
-        // Prefer documented example for track-order
-        if (path === "/track-order") {
-          reqPath = `${path}?awb_number=SAMPLE`;
-        } else if (path === "/get-warehouses") {
-          reqPath = path; // list without page is valid
-        } else {
-          reqPath = `${reqPath}?${qs}`;
-        }
-      }
-
-      const wrapped = await proxyRequest({
-        method,
-        path: reqPath,
-        headers: {
-          ...authHeaders(),
-          ...(body ? { "Content-Type": "application/json" } : {}),
-        },
-        body,
-      });
-
-      // If we need query params, include them in path for proxy
-      const hint = interpretShipmozoResponse(wrapped?.data || wrapped);
-      const ok = hint?.type === "ok" || wrapped?.data?.result === "1" || wrapped?.data?.result === 1;
-      statusEl.className = `doc-test-status ${ok ? "is-ok" : "is-err"}`;
-      statusEl.textContent = ok
-        ? `${hint?.title || "Success"} — open API Tester for the full response.`
-        : `${hint?.title || "Failed"} — ${hint?.text || "See message / data.error in API Tester."}`;
-    } catch (err) {
-      statusEl.className = "doc-test-status is-err";
-      statusEl.textContent = `Request failed: ${err.message || err}`;
-    } finally {
-      btn.disabled = false;
-    }
-  });
 }
 
 const JOURNEY_STORAGE = "shipmozo_portal_journey_v1";
@@ -2480,7 +2416,6 @@ async function route() {
     if (item) {
       main.innerHTML = renderEndpoint(item);
       bindCodeTabs(main);
-      bindDocTestButton(main, item);
       return;
     }
   }
