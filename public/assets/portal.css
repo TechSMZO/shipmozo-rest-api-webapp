@@ -826,7 +826,13 @@ tr:last-child td { border-bottom: none; }
 }
 
 .tester-field-contract-bottom {
-  margin-top: 4px;
+  margin-top: 20px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.tester-field-contract-bottom .field-contract-section {
+  margin-top: 0;
 }
 
 .tester-form,
@@ -1526,24 +1532,24 @@ body.modal-open {
   vertical-align: top;
 }
 .field-contract-table th:nth-child(1),
-.field-contract-table td:nth-child(1) { width: 14%; }
+.field-contract-table td:nth-child(1) { width: 16%; }
 .field-contract-table th:nth-child(2),
-.field-contract-table td:nth-child(2) { width: 9%; }
+.field-contract-table td:nth-child(2) { width: 8%; }
 .field-contract-table th:nth-child(3),
-.field-contract-table td:nth-child(3) { width: 10%; }
+.field-contract-table td:nth-child(3) { width: 12%; }
 .field-contract-table th:nth-child(4),
-.field-contract-table td:nth-child(4) { width: 18%; }
+.field-contract-table td:nth-child(4) { width: 22%; }
 .field-contract-table th:nth-child(5),
-.field-contract-table td:nth-child(5) { width: 49%; }
-.field-contract-table td:nth-child(1),
+.field-contract-table td:nth-child(5) { width: 42%; }
+/* Type/Required stay single-line; clip so badges never paint over Values */
 .field-contract-table td:nth-child(2),
 .field-contract-table td:nth-child(3),
-.field-contract-table th:nth-child(1),
 .field-contract-table th:nth-child(2),
 .field-contract-table th:nth-child(3) {
   white-space: nowrap;
+  overflow: hidden;
 }
-/* Name/Type/Required stay single-line; Values + Notes wrap */
+/* Values + Notes wrap */
 .field-contract-table th:nth-child(4),
 .field-contract-table td:nth-child(4),
 .field-contract-table th:nth-child(5),
@@ -1551,9 +1557,6 @@ body.modal-open {
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
-}
-.field-contract-table td:nth-child(1) code {
-  white-space: nowrap;
 }
 /* Long JSON examples inside Notes — wrap inside the cell, never widen the table */
 .field-contract-note-json {
@@ -1641,18 +1644,13 @@ body.modal-open {
   padding: 10px 12px;
   vertical-align: top;
 }
-.param-col-name,
+/* In/Type/Required headers+cells stay single-line; Name wraps (shared rules below) */
 .param-col-in,
 .param-col-type,
 .param-col-required,
-.param-table th:nth-child(1),
 .param-table th:nth-child(2),
 .param-table th:nth-child(3),
 .param-table th:nth-child(4) {
-  white-space: nowrap;
-}
-.param-col-name code,
-.param-table td.param-col-name code {
   white-space: nowrap;
 }
 .param-col-desc {
@@ -1660,6 +1658,36 @@ body.modal-open {
   word-break: normal;
   /* Description may wrap at word boundaries; never mid-token */
   min-width: 8rem;
+}
+
+/*
+ * Shared first/name column for Headers, Path & Query, and Request Payload tables.
+ * Long identifiers wrap inside the cell — never bleed into the next column.
+ */
+.field-contract-table th:nth-child(1),
+.field-contract-table td:nth-child(1),
+.param-col-name,
+.param-table th:nth-child(1),
+.param-table td.param-col-name {
+  white-space: normal;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+/* Param tables (docs Request column) keep a readable Name floor; payload tables rely on % widths */
+.param-col-name,
+.param-table th:nth-child(1),
+.param-table td.param-col-name {
+  min-width: 7.5rem;
+}
+.field-contract-table td:nth-child(1) code,
+.param-col-name code,
+.param-table td.param-col-name code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .endpoint-doc-http-note {
   margin: 0 0 14px;
@@ -1911,4 +1939,11 @@ body.modal-open {
 @media (min-width: 961px) and (max-width: 1200px) {
   .demo-steps-grid { grid-template-columns: repeat(2, 1fr); }
   .demo-workflow-cards { grid-template-columns: repeat(2, 1fr); }
+}
+
+
+.field-contract-section-title {
+  margin: 18px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
 }

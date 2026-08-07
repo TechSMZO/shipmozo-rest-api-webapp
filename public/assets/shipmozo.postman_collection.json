@@ -65,8 +65,8 @@
                 "type": "text"
               }
             ],
-            "url": "{{baseUrl}}/get-order-label/{{awb_number}}",
-            "description": "Returns the shipping label for a shipment as a base64-encoded image, once a courier has been assigned."
+            "url": "{{baseUrl}}/get-order-label/{{awb_number}}?type_of_label=%7B%7Btype_of_label%7D%7D",
+            "description": "Generates and returns the shipping label for an AWB. Pass type_of_label=PDF for a PDF URL; omit (or any other value) for the default BASE64 PNG data URI. Always generates fresh content — there is no “label not ready yet” error."
           },
           "response": []
         },
@@ -92,7 +92,33 @@
               }
             ],
             "url": "{{baseUrl}}/generate-manifest?awb_numbers=%7B%7Bawb_numbers%7D%7D",
-            "description": "Generates a pickup manifest document for the given AWB number(s)."
+            "description": "Generates pickup manifest PDF file(s) for up to 25 AWB numbers. Response data is a list of objects with file (URL) and awb_numbers."
+          },
+          "response": []
+        },
+        {
+          "name": "Get previously generated manifests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "public-key",
+                "value": "{{public-key}}",
+                "type": "text"
+              },
+              {
+                "key": "private-key",
+                "value": "{{private-key}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/get-manifests?awb_numbers=%7B%7Bawb_numbers%7D%7D",
+            "description": "Returns previously generated manifest file URLs for the given AWB numbers (max 25). Distinct from Generate Manifest — this retrieves existing files rather than creating new ones."
           },
           "response": []
         }
@@ -248,10 +274,10 @@
               }
             ],
             "url": "{{baseUrl}}/international-push-order",
-            "description": "Creates an international/export shipment order.",
+            "description": "Creates an international/export shipment order. Returns the same order_id (internal) / refrence_id (echo) split as domestic Push Order. International never takes a courier_id at push time.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2024-01-06\",\n  \"consignee_name\": \"John\",\n  \"consignee_company_name\": \"John\",\n  \"consignee_phone\": \"8000042323\",\n  \"consignee_alternate_phone\": \"8000042323\",\n  \"consignee_email\": \"johnhelp@gmail.com\",\n  \"consignee_address_line_one\": \"Sector 49\",\n  \"consignee_address_line_two\": \"Sohna Road\",\n  \"consignee_country_id\": \"2\",\n  \"consignee_pin_code\": \"122001\",\n  \"consignee_city\": \"Gurgaon\",\n  \"consignee_state\": \"Haryana\",\n  \"consignee_gst_number\": \"\",\n  \"row_content\": [\n    {\n      \"name\": \"Laptop\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"tax\": 0,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"type_of_package\": \"SPS\",\n  \"shipment_purpose\": \"SCSB4\",\n  \"shipping_charges\": \"\",\n  \"weight\": \"200\",\n  \"length\": \"10\",\n  \"width\": \"20\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"\",\n  \"gst_ewaybill_number\": \"\",\n  \"gstin_number\": \"\",\n  \"currency\": \"INR\",\n  \"iec_number\": \"\",\n  \"terms_of_invoice\": \"FOB\",\n  \"ecomm\": \"NO\",\n  \"ad_code\": \"\",\n  \"invoice_number\": \"\",\n  \"invoice_date\": \"2025-04-01\",\n  \"meis\": \"NO\",\n  \"export_type\": \"NA\",\n  \"ioss_number\": \"\",\n  \"lut_number\": \"\",\n  \"lut_issue_date\": \"\",\n  \"lut_till_date\": \"\",\n  \"freight_amount\": \"\",\n  \"incoterms\": \"DDP\",\n  \"insurance_amount\": \"\",\n  \"shipper_id\": \"\"\n}",
+              "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2024-01-06\",\n  \"consignee_name\": \"John\",\n  \"consignee_company_name\": \"John\",\n  \"consignee_phone\": \"8000042323\",\n  \"consignee_alternate_phone\": \"8000042323\",\n  \"consignee_email\": \"johnhelp@gmail.com\",\n  \"consignee_address_line_one\": \"Sector 49\",\n  \"consignee_address_line_two\": \"Sohna Road\",\n  \"consignee_country_id\": \"2\",\n  \"consignee_pin_code\": \"122001\",\n  \"consignee_city\": \"Gurgaon\",\n  \"consignee_state\": \"Haryana\",\n  \"consignee_gst_number\": \"\",\n  \"row_content\": [\n    {\n      \"name\": \"Laptop\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"tax\": 0,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"type_of_package\": \"SPS\",\n  \"shipment_purpose\": \"SCSB4\",\n  \"shipping_charges\": \"\",\n  \"weight\": \"200\",\n  \"length\": \"10\",\n  \"width\": \"20\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"\",\n  \"gst_ewaybill_number\": \"\",\n  \"gstin_number\": \"\",\n  \"currency\": \"INR\",\n  \"iec_number\": \"\",\n  \"terms_of_invoice\": \"FOB\",\n  \"ecomm\": \"NO\",\n  \"ad_code\": \"\",\n  \"invoice_number\": \"\",\n  \"invoice_date\": \"2025-04-01\",\n  \"meis\": \"NO\",\n  \"export_type\": \"NA\",\n  \"ioss_number\": \"\",\n  \"lut_number\": \"\",\n  \"lut_issue_date\": \"\",\n  \"lut_till_date\": \"\",\n  \"freight_amount\": \"\",\n  \"incoterms\": \"DDP\",\n  \"insurance_amount\": \"\",\n  \"shipper_id\": 0,\n  \"ref_order_id\": \"\",\n  \"weight_unit\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -331,7 +357,7 @@
             "description": "Creates a reverse/return shipment with pickup from the customer address. Use a return_reason_id from get-return-reason.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2024-07-27\",\n  \"pickup_name\": \"John\",\n  \"pickup_phone\": \"8000042323\",\n  \"pickup_email\": \"johnhelp@gmail.com\",\n  \"pickup_address_line_one\": \"Sector 49\",\n  \"pickup_address_line_two\": \"Sohna Road\",\n  \"pickup_pin_code\": \"122001\",\n  \"pickup_city\": \"Gurgaon\",\n  \"pickup_state\": \"Haryana\",\n  \"product_detail\": [\n    {\n      \"name\": \"Product Name\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"payment_type\": \"PREPAID\",\n  \"weight\": \"2\",\n  \"length\": \"10\",\n  \"width\": \"500\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"\",\n  \"return_reason_id\": \"\",\n  \"customer_request\": \"REFUND\",\n  \"reason_comment\": \"\"\n}",
+              "raw": "{\n  \"order_id\": \"ordID\",\n  \"order_date\": \"2024-07-27\",\n  \"pickup_name\": \"John\",\n  \"pickup_phone\": \"8000042323\",\n  \"pickup_email\": \"johnhelp@gmail.com\",\n  \"pickup_address_line_one\": \"Sector 49\",\n  \"pickup_address_line_two\": \"Sohna Road\",\n  \"pickup_pin_code\": \"122001\",\n  \"pickup_city\": \"Gurgaon\",\n  \"pickup_state\": \"Haryana\",\n  \"product_detail\": [\n    {\n      \"name\": \"Product Name\",\n      \"sku_number\": \"22\",\n      \"quantity\": 1,\n      \"discount\": \"\",\n      \"hsn\": \"#123\",\n      \"unit_price\": 1000,\n      \"product_category\": \"Other\"\n    }\n  ],\n  \"payment_type\": \"PREPAID\",\n  \"weight\": \"2\",\n  \"length\": \"10\",\n  \"width\": \"500\",\n  \"height\": \"15\",\n  \"warehouse_id\": \"\",\n  \"return_reason_id\": \"\",\n  \"customer_request\": \"REFUND\",\n  \"reason_comment\": \"\",\n  \"pickup_alternate_phone\": \"\",\n  \"is_qc\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -363,7 +389,7 @@
               }
             ],
             "url": "{{baseUrl}}/get-order-detail/{{order_id}}",
-            "description": "Returns full details for an order by order_id."
+            "description": "Returns the full order snapshot by Shipmozo internal order_id."
           },
           "response": []
         },
@@ -389,7 +415,7 @@
               }
             ],
             "url": "{{baseUrl}}/get-ndr-all?from=%7B%7Bfrom%7D%7D&to=%7B%7Bto%7D%7D&per_page=%7B%7Bper_page%7D%7D&page=%7B%7Bpage%7D%7D",
-            "description": "Lists non-delivery report (NDR) shipments that need action."
+            "description": "Lists non-delivery report (NDR) shipments that need action. Response is a paginated envelope with limit, from_to, next_page_url, total_pages, current_page, total, and data."
           },
           "response": []
         },
@@ -452,10 +478,24 @@
                 "key": "private-key",
                 "value": "{{private-key}}",
                 "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
               }
             ],
-            "url": "{{baseUrl}}/ndr-action/{{awb_number}}?action=%7B%7Baction%7D%7D",
-            "description": "Takes an action on an NDR shipment (reattempt, RTO, etc.)."
+            "url": "{{baseUrl}}/ndr-action/{{awb_number}}",
+            "description": "Applies an NDR action on a shipment. Request body field action must be REATTEMPT or RETURN.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"REATTEMPT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         }
@@ -486,7 +526,7 @@
               }
             ],
             "url": "{{baseUrl}}/track-order?awb_number=%7B%7Bawb_number%7D%7D",
-            "description": "Returns the current tracking status and scan history for a shipment by AWB number."
+            "description": "Returns the current tracking status and scan history for a single shipment by AWB number."
           },
           "response": []
         }
@@ -562,7 +602,7 @@
               }
             ],
             "url": "{{baseUrl}}/international-rate-calculator",
-            "description": "Compares international courier rates for a given destination and package.",
+            "description": "Compares international courier rates for a destination and package. Response is a courier array like domestic Rate Calculator, but without from_zone / to_zone (no zone concept for cross-border).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"pickup_pincode\": \"122001\",\n  \"delivery_pincode\": \"110001\",\n  \"delivery_country_id\": \"2\",\n  \"order_amount\": \"1000\",\n  \"type_of_package\": \"SPS\",\n  \"shipment_purpose\": \"SCSB4\",\n  \"weight\": \"500\",\n  \"dimensions\": [\n    {\n      \"no_of_box\": \"1\",\n      \"length\": \"22\",\n      \"width\": \"10\",\n      \"height\": \"10\"\n    }\n  ]\n}",
@@ -597,7 +637,7 @@
               }
             ],
             "url": "{{baseUrl}}/countries",
-            "description": "Returns countries available for international shipping. Use country ids when creating international orders."
+            "description": "Returns countries available for international shipping. Each country has id, name, phone_code, country_code, and iso_code. Country id 1 (India) is explicitly excluded from this list."
           },
           "response": []
         },
@@ -658,7 +698,7 @@
           "response": []
         },
         {
-          "name": "Register a shipper profile",
+          "name": "Register a shipper of record (international only)",
           "request": {
             "method": "POST",
             "header": [
@@ -684,10 +724,10 @@
               }
             ],
             "url": "{{baseUrl}}/create-shipper",
-            "description": "Registers a shipper/exporter profile used for international shipments.",
+            "description": "Registers a shipper of record used only for international shipments — the returned shipper_id is passed into International Push Order for customs/export paperwork. Has no relationship to domestic orders.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Rahul\",\n  \"phone\": \"9876543210\",\n  \"email\": \"test@gmail.com\",\n  \"address_line_one\": \"delhi railway station\",\n  \"address_line_two\": \"new delhi\",\n  \"pin_code\": \"141211\"\n}",
+              "raw": "{\n  \"name\": \"Rahul\",\n  \"phone\": \"9876543210\",\n  \"email\": \"test@gmail.com\",\n  \"address_line_one\": \"delhi railway station\",\n  \"address_line_two\": \"new delhi\",\n  \"pin_code\": \"141211\",\n  \"status\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

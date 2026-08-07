@@ -8,7 +8,7 @@ import {
   loadLifecycleScenarioId,
   getLifecycleWorkflow,
 } from "./workflow-tester.js?v=42";
-import { loadFieldContracts, renderFieldContract } from "./field-contract-renderer.js?v=44";
+import { loadFieldContracts, renderFieldContract } from "./field-contract-renderer.js?v=45";
 import { renderDemoPage, bindDemoPage } from "./demo-player.js?v=34";
 
 const API_BACKENDS = {
@@ -1032,7 +1032,12 @@ function renderStaticIntro() {
 
     <div class="section">
       <h2>Rate limits</h2>
-      <p>All <strong>${operations.length || 23} APIs</strong> share <strong>${g.limit || 500} requests per minute</strong> per API key. Each call lowers <code>x-ratelimit-remaining</code> by 1; when the minute ends, the counter <strong>refreshes</strong> back toward 500.</p>
+      <p>All <strong>${operations.length || 23} APIs</strong> share <strong>${g.limit || 500} requests per minute</strong> per client IP address (not per API key). Each call lowers <code>x-ratelimit-remaining</code> by 1; when the minute ends, the counter <strong>refreshes</strong> back toward 500.</p>
+      ${
+        portalMeta.rateLimitIpNote
+          ? `<div class="note tip" style="margin:12px 0"><strong>Per IP, not per key:</strong> ${esc(portalMeta.rateLimitIpNote)}</div>`
+          : ""
+      }
       ${
         rlHeaders
           ? `<table style="margin-top:12px"><thead><tr><th>Header</th><th>Example</th><th>Meaning</th></tr></thead><tbody>${rlHeaders.headers
@@ -1150,7 +1155,13 @@ function renderRateLimitsPage() {
   const rlHeaders = portalMeta.rateLimitHeaders;
   return `
     <h1 class="page-title">Rate limits — all APIs</h1>
-    <p class="page-lead">Every Shipmozo v1 endpoint shares <strong>500 requests per minute</strong> per API key. <code>x-ratelimit-remaining</code> is returned on each response — it is <strong>not</strong> a live timer on this page.</p>
+    <p class="page-lead">Every Shipmozo v1 endpoint shares <strong>500 requests per minute</strong> per client IP address (not per API key). <code>x-ratelimit-remaining</code> is returned on each response — it is <strong>not</strong> a live timer on this page.</p>
+
+    ${
+      portalMeta.rateLimitIpNote
+        ? `<div class="note tip"><strong>Per IP, not per key:</strong> ${esc(portalMeta.rateLimitIpNote)}</div>`
+        : ""
+    }
 
     ${renderLiveRateLimitBox()}
 
@@ -1175,21 +1186,31 @@ function renderRateLimitsPage() {
               .join("")}</tbody></table><p class="note" style="margin-top:12px">${esc(rlHeaders.note || "")}</p>`
           : ""
       }
-      <p><strong>Shared quota:</strong> All endpoints use the same <code>remaining</code> counter for your key within each 1-minute window.</p>
+      <p><strong>Shared quota:</strong> All endpoints on the same client IP share one <code>remaining</code> counter within each 1-minute window.</p>
       <p><strong>When exceeded:</strong> ${esc(g.whenExceeded || "HTTP 429")}</p>
     </div>
 
     <div class="section">
-      <h2>Per-endpoint reference (24 APIs)</h2>
+      <h2>Per-endpoint reference (${operations.length || 25} APIs)</h2>
       ${renderRateLimitByEndpointTable()}
     </div>`;
 }
 
 function renderErrors() {
   const codes = portalMeta.errorCodes || [];
+  const already = portalMeta.alreadyInStateNote;
   return `
     <h1 class="page-title">Errors &amp; troubleshooting</h1>
     <p class="page-lead">Shipmozo’s API returns <strong>HTTP 200</strong> even when a call fails. Check <code>result</code> (<code>"1"</code> success / <code>"0"</code> failure), then read <code>message</code> and <code>data.error</code>. The API does not return machine-readable SNAKE_CASE error codes.</p>
+
+    ${
+      already
+        ? `<div class="section">
+      <h2>${esc(already.title || "Already in this state")}</h2>
+      <div class="note tip">${esc(already.body || "")}</div>
+    </div>`
+        : ""
+    }
 
     <div class="section">
       <h2>Common failure scenarios</h2>
@@ -1212,6 +1233,8 @@ function renderErrors() {
 }
 
 function renderBestPractices() {
+  const tz = portalMeta.timezoneNote;
+  const opt = portalMeta.optionalFieldNote;
   return `
     <h1 class="page-title">Best practices</h1>
     <div class="section">
@@ -1224,7 +1247,23 @@ function renderBestPractices() {
         <li>Implement exponential backoff on rate-limit and 5xx responses.</li>
         <li>Keep <code>private-key</code> on server-side only.</li>
       </ol>
-    </div>`;
+    </div>
+    ${
+      opt
+        ? `<div class="section">
+      <h2>Optional / empty fields</h2>
+      <p>${esc(opt)}</p>
+    </div>`
+        : ""
+    }
+    ${
+      tz
+        ? `<div class="section">
+      <h2>Timezones</h2>
+      <p>${esc(tz)}</p>
+    </div>`
+        : ""
+    }`;
 }
 
 function renderEndpoint(item) {
@@ -1251,19 +1290,32 @@ function renderEndpoint(item) {
   const useCases = op["x-useCases"] || [];
   const responseFields = op["x-responseFields"] || [];
   const failureFields = op["x-failureFields"] || [];
+  const failureMessages = op["x-failureMessages"] || [];
   const prominentNotes = op["x-docNotes"] || [];
   const rateCalculatorTip =
     path === "/rate-calculator"
       ? `<div class="note tip"><strong>Tip:</strong> to check if a pincode pair is serviceable, call this endpoint — one or more couriers returned means the route is serviceable. An empty list or <code>result: "0"</code> means not serviceable.</div>`
+      : "";
+  const intlKycWarn =
+    path === "/international-push-order"
+      ? `<div class="note warn"><strong>KYC required:</strong> Aadhaar KYC must be verified on the account before this endpoint works. Failure returns <code>Kyc is not verified</code>.</div>`
       : "";
 
   const successBlock = successEx
     ? `<div class="code-block-wrap"><pre><code>${esc(JSON.stringify(successEx, null, 2))}</code></pre></div>${renderResponseFieldList(responseFields)}`
     : `<p class="note warn" data-docs-unverified="response">Example response not yet available for this endpoint.</p>${renderResponseFieldList(responseFields)}`;
 
+  const failureMessageTable = failureMessages.length
+    ? `<table class="error-table" style="margin-top:10px"><thead><tr><th>Cause</th><th>Message</th></tr></thead><tbody>${failureMessages
+        .map((m) => `<tr><td>${esc(m.cause || "")}</td><td><code>${esc(m.message || "")}</code></td></tr>`)
+        .join("")}</tbody></table>`
+    : "";
+
   const failureBlock = failureEx
-    ? `<div class="code-block-wrap"><pre><code>${esc(JSON.stringify(failureEx, null, 2))}</code></pre></div>${renderResponseFieldList(failureFields)}`
-    : `<p class="note warn" data-docs-unverified="error-example">A verified failure example is not yet available for this endpoint. On failure the API still returns HTTP 200 with <code>result: "0"</code> — read <code>message</code> and <code>data.error</code>.</p>`;
+    ? `<div class="code-block-wrap"><pre><code>${esc(JSON.stringify(failureEx, null, 2))}</code></pre></div>${failureMessageTable}${renderResponseFieldList(failureFields)}`
+    : failureMessageTable
+      ? failureMessageTable
+      : `<p class="note warn" data-docs-unverified="error-example">A verified failure example is not yet available for this endpoint. On failure the API still returns HTTP 200 with <code>result: "0"</code> — read <code>message</code> and <code>data.error</code>.</p>`;
 
   return `
     <article class="endpoint-header">
@@ -1292,6 +1344,7 @@ function renderEndpoint(item) {
 
       <div class="endpoint-doc-columns">
         <div class="endpoint-doc-request">
+          ${intlKycWarn}
           ${rateCalculatorTip}
           ${
             useCases.length
@@ -1354,13 +1407,41 @@ const TESTER_ENUM_OPTIONS = {
   type_of_package: ["SPS", "B2B", "MPS"],
   rov_type: ["ROV_OWNER", "ROV_CARRIER"],
   order_type: ["ESSENTIALS", "NON ESSENTIALS"],
-  shipment_purpose: ["SCSB4", "CSB5", "DSCB4"],
+  shipment_purpose: ["DCSB4", "SCSB4", "CSB5"],
+  action: ["REATTEMPT", "RETURN"],
+  customer_request: ["REFUND", "EXCHANGE"],
+  is_qc: ["YES", "NO"],
+  type_of_label: ["PDF", "BASE64"],
+};
+
+/** Path-specific overrides (e.g. returns: PREPAID only; international: no B2B). */
+const TESTER_ENUM_OPTIONS_BY_PATH = {
+  "/push-return-order": {
+    payment_type: ["PREPAID"],
+  },
+  "/international-push-order": {
+    type_of_package: ["SPS", "MPS"],
+  },
+  "/international-rate-calculator": {
+    type_of_package: ["SPS", "MPS"],
+  },
+};
+
+const TESTER_ENUM_HINTS = {
+  "/ndr-action/{awb_number}": [{ field: "action", values: "REATTEMPT, RETURN" }],
+  "/push-return-order": [
+    { field: "customer_request", values: "REFUND, EXCHANGE" },
+    { field: "payment_type", values: "PREPAID only" },
+  ],
+  "/get-order-label/{awb_number}": [{ field: "type_of_label", values: "PDF (else BASE64)" }],
 };
 
 const TESTER_UNIT_FACTS = {
   "/push-order": "Weight is in grams. Dimensions (length, width, height) are in cm. Dates use YYYY-MM-DD.",
   "/rate-calculator": "Weight is in grams. Dimensions (length, width, height) are in cm.",
-  "/push-return-order": "Weight is in kg. Dimensions (length, width, height) are in cm. Dates use YYYY-MM-DD.",
+  "/push-return-order": "Weight is in kg. Dimensions (length, width, height) are in cm. Dates use YYYY-MM-DD. No upper bound on weight/dimensions.",
+  "/international-push-order": "Weight is in kg (not grams). Dimensions in cm. KYC must be verified.",
+  "/international-rate-calculator": "Weight is in grams (different unit/caps from International Push Order). Dimensions in cm.",
 };
 
 const TESTER_PREREQS = {
@@ -1395,18 +1476,33 @@ const TESTER_PREREQS = {
     links: [{ opId: "post-/assign-courier", label: "Assign Courier" }],
   },
   "/get-order-label/{awb_number}": {
-    text: "Needs the awb_number from Assign Courier or Schedule Pickup.",
+    text: "Needs the awb_number from Assign Courier or Schedule Pickup. Optional type_of_label=PDF for a PDF URL.",
     links: [
       { opId: "post-/assign-courier", label: "Assign Courier" },
       { opId: "post-/schedule-pickup", label: "Schedule Pickup" },
     ],
   },
+  "/generate-manifest": {
+    text: "Needs up to 25 AWB numbers (comma-separated). Generate creates new manifest PDFs.",
+    links: [
+      { opId: "post-/assign-courier", label: "Assign Courier" },
+      { opId: "get-/get-manifests", label: "Get Manifests" },
+    ],
+  },
+  "/get-manifests": {
+    text: "Retrieves previously generated manifest files for up to 25 AWBs. Generate first if none exist.",
+    links: [{ opId: "get-/generate-manifest", label: "Generate Manifest" }],
+  },
   "/track-order": {
-    text: "Needs the awb_number from Assign Courier or Schedule Pickup.",
+    text: "Needs a single awb_number from Assign Courier or Schedule Pickup.",
     links: [
       { opId: "post-/assign-courier", label: "Assign Courier" },
       { opId: "post-/schedule-pickup", label: "Schedule Pickup" },
     ],
+  },
+  "/ndr-action/{awb_number}": {
+    text: "Needs an NDR AWB from Get NDR All. action must be REATTEMPT or RETURN.",
+    links: [{ opId: "get-/get-ndr-all", label: "Get NDR All" }],
   },
   "/order/update-warehouse": {
     text: "Needs the internal order_id from Push Order and a warehouse_id from Get Warehouses.",
@@ -1488,7 +1584,7 @@ function updateJourneyFromCall(item, payload) {
   if (item.path === "/push-order" || item.path === "/push-return-order") setJourney({ pushed: true });
   if (["/rate-calculator", "/international-rate-calculator"].includes(item.path)) setJourney({ rated: true });
   if (["/assign-courier", "/auto-assign-order"].includes(item.path)) setJourney({ courierAssigned: true });
-  if (["/get-order-label/{awb_number}", "/generate-manifest"].includes(item.path)) setJourney({ labeled: true });
+  if (["/get-order-label/{awb_number}", "/generate-manifest", "/get-manifests"].includes(item.path)) setJourney({ labeled: true });
   if (["/track-order", "/cancel-order"].includes(item.path)) setJourney({ completed: true });
 }
 
@@ -1770,7 +1866,16 @@ function getRequestBodySchema(op) {
 
 function getEnumFieldsForOperation(item) {
   const properties = getRequestBodySchema(item.op)?.properties || {};
-  return Object.keys(TESTER_ENUM_OPTIONS).filter((field) => Object.hasOwn(properties, field));
+  const pathEnums = TESTER_ENUM_OPTIONS_BY_PATH[item.path] || {};
+  return Object.keys(TESTER_ENUM_OPTIONS)
+    .concat(Object.keys(pathEnums))
+    .filter((field, i, arr) => arr.indexOf(field) === i)
+    .filter((field) => Object.hasOwn(properties, field));
+}
+
+function getEnumOptionsForField(item, field) {
+  const pathEnums = TESTER_ENUM_OPTIONS_BY_PATH[item.path] || {};
+  return pathEnums[field] || TESTER_ENUM_OPTIONS[field] || [];
 }
 
 function getTesterExampleText(item) {
@@ -1827,12 +1932,12 @@ function renderPhase1Tester(preselectId) {
             </div>
             <p class="muted small" id="testerAuthHint"></p>
             <div id="testerEnumControls" class="tester-enum-controls hidden"></div>
+            <p class="muted small" id="testerOptionalHint">Optional fields: omit the field or send <code>null</code>. Empty string <code>""</code> is not universally safe.</p>
             <div id="testerParams"></div>
             <label for="testerBody">Request body (JSON)</label>
             <div id="testerBodyHints" class="tester-body-hints hidden"></div>
             <textarea id="testerBody" rows="12" placeholder="{}" aria-label="Request body (JSON)"></textarea>
           </div>
-          <div id="testerFieldContract" class="tester-field-contract-bottom"></div>
         </div>
         <div class="card tester-response-card">
           <div class="tester-response-head">
@@ -1856,6 +1961,8 @@ function renderPhase1Tester(preselectId) {
           </div>
         </div>
       </div>
+      <!-- Full-width below Request|Response (same as endpoint docs) so payload columns aren't crushed -->
+      <div id="testerFieldContract" class="tester-field-contract-bottom"></div>
       </div>
 
       <div id="workflowModeMount" class="${lifecycle ? "" : "hidden"}">
@@ -2045,7 +2152,7 @@ function bindPhase1Tester(preselectId) {
           .map(
             (field) => `<label for="enum-${field}">${esc(field.replaceAll("_", " "))}</label>
               <select id="enum-${field}" data-enum-field="${field}" aria-label="${esc(field)}">
-                ${TESTER_ENUM_OPTIONS[field]
+                ${getEnumOptionsForField(item, field)
                   .map((value) => `<option value="${esc(value)}" ${body[field] === value ? "selected" : ""}>${esc(value)}</option>`)
                   .join("")}
               </select>`
