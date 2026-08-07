@@ -208,9 +208,20 @@
                     "description": "Pincode",
                     "format": "string",
                     "default": "141211"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Shipper status (required; no restricted value set)."
                   }
                 },
-                "type": "object"
+                "type": "object",
+                "required": [
+                  "name",
+                  "phone",
+                  "address_line_one",
+                  "pin_code",
+                  "status"
+                ]
               }
             }
           }
@@ -269,6 +280,19 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "type_of_label",
+            "in": "query",
+            "description": "Pass PDF (case-insensitive) for a PDF label URL. Any other value or omit → default BASE64 PNG data URI. Not validated server-side.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PDF",
+                "BASE64"
+              ]
             }
           }
         ],
@@ -805,9 +829,16 @@
                     "default": ""
                   },
                   "shipper_id": {
-                    "description": "shipper_id (Get this from create-shipper API)",
-                    "format": "string",
-                    "default": ""
+                    "type": "integer",
+                    "description": "Shipper of record from create-shipper (international customs/export)"
+                  },
+                  "ref_order_id": {
+                    "type": "string",
+                    "description": "Optional reference order id"
+                  },
+                  "weight_unit": {
+                    "type": "string",
+                    "description": "Weight unit for the shipment"
                   }
                 },
                 "type": "object"
@@ -1007,6 +1038,18 @@
                     "description": "Reason Comment",
                     "format": "string",
                     "default": ""
+                  },
+                  "pickup_alternate_phone": {
+                    "type": "string",
+                    "description": "Optional 10-digit alternate phone; must differ from pickup_phone"
+                  },
+                  "is_qc": {
+                    "type": "string",
+                    "enum": [
+                      "YES",
+                      "NO"
+                    ],
+                    "description": "Optional QC flag"
                   }
                 },
                 "type": "object"
@@ -1327,7 +1370,7 @@
           "Label"
         ],
         "summary": "Generate Manifest",
-        "description": "Generate Manifest",
+        "description": "Generate pickup manifest PDF(s) for up to 25 AWB numbers. Returns a list of {file, awb_numbers} where file is a URL.",
         "operationId": "generateManifest",
         "parameters": [
           {
@@ -1351,10 +1394,11 @@
           {
             "name": "awb_numbers",
             "in": "query",
-            "description": "One or more AWB numbers as a comma-separated list. A specific maximum count per request is not independently verified in this portal.",
+            "description": "Comma-separated AWB numbers to generate manifests for. Required. Maximum 25 AWBs per request.",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxItems": 25
             }
           }
         ],
@@ -1471,20 +1515,37 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "action",
-            "in": "query",
-            "description": "Action, in: REATTEMPT, RETURN",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
           "200": {
             "description": "Successful operation"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "REATTEMPT",
+                      "RETURN"
+                    ],
+                    "description": "NDR action: REATTEMPT or RETURN"
+                  }
+                }
+              },
+              "example": {
+                "action": "REATTEMPT"
+              }
+            }
           }
         }
       }
@@ -2023,6 +2084,50 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/get-manifests": {
+      "get": {
+        "tags": [
+          "Label"
+        ],
+        "summary": "Get Manifests",
+        "description": "Retrieve previously generated manifest file URLs for the given AWB numbers (max 25).",
+        "operationId": "getManifests",
+        "parameters": [
+          {
+            "name": "public-key",
+            "in": "header",
+            "description": "Api Public Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "private-key",
+            "in": "header",
+            "description": "Api Private Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "awb_numbers",
+            "in": "query",
+            "description": "Comma-separated AWB numbers. Required. Maximum 25 AWBs per request.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation"
           }
         }
       }

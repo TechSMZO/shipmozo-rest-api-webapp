@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Shipmozo Shipping API",
-    "description": "REST API for order fulfillment, courier assignment, tracking, warehouses, NDR, and labels. All responses use `result` (`1` = success, `0` = failure), `message`, and `data`.\n\n**Base URL:** `https://shipping-api.com/app/api/v1` — do not add a trailing slash.\n\n**Auth:** Send `public-key` and `private-key` headers on every protected route, or obtain keys via `POST /login`.\n\n**Rate limits:** Shipmozo returns `x-ratelimit-limit` (500) and `x-ratelimit-remaining` on each response. Quota is **500 requests per 1-minute window** per API key; `remaining` drops with each call and **refreshes when the minute rolls over**.\n\n**Support:** munish@apporio.in",
+    "description": "REST API for order fulfillment, courier assignment, tracking, warehouses, NDR, and labels. All responses use `result` (`1` = success, `0` = failure), `message`, and `data`.\n\n**Base URL:** `https://shipping-api.com/app/api/v1` — do not add a trailing slash.\n\n**Auth:** Send `public-key` and `private-key` headers on every protected route, or obtain keys via `POST /login`.\n\n**Rate limits:** Shipmozo returns `x-ratelimit-limit` (500) and `x-ratelimit-remaining` on each response. Quota is **500 requests per 1-minute window** per client IP address (not per API key); `remaining` drops with each call and **refreshes when the minute rolls over**.\n\n**Support:** munish@apporio.in",
     "contact": {
       "name": "Shipmozo API Support",
       "email": "munish@apporio.in"
@@ -22,7 +22,7 @@
           "Utility"
         ],
         "summary": "Get list of countries (for international shipments)",
-        "description": "Returns countries available for international shipping. Use country ids when creating international orders.",
+        "description": "Returns countries available for international shipping. Each country has id, name, phone_code, country_code, and iso_code. Country id 1 (India) is explicitly excluded from this list.",
         "operationId": "Countries",
         "parameters": [
           {
@@ -46,14 +46,56 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful operation",
-            "x-exampleUnavailable": true
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": [
+                    {
+                      "id": 2,
+                      "name": "United States",
+                      "phone_code": "+1",
+                      "country_code": "US",
+                      "iso_code": "USA"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           }
         },
-        "x-exampleUnavailable": true,
+        "x-useCases": [
+          "Populate country picker for international orders"
+        ],
+        "x-docNotes": [
+          "Country id 1 (India) is excluded — India will not appear if you build a country picker from this endpoint alone."
+        ],
+        "x-responseFields": [
+          {
+            "name": "id",
+            "notes": "Country id (use as consignee_country_id / delivery_country_id)."
+          },
+          {
+            "name": "name",
+            "notes": "Country name."
+          },
+          {
+            "name": "phone_code",
+            "notes": "International dialing code."
+          },
+          {
+            "name": "country_code",
+            "notes": "Country code."
+          },
+          {
+            "name": "iso_code",
+            "notes": "ISO country code."
+          }
+        ],
         "security": [
           {
             "ApiKeyPublic": []
@@ -139,7 +181,7 @@
           "Track"
         ],
         "summary": "Track a shipment's status",
-        "description": "Returns the current tracking status and scan history for a shipment by AWB number.",
+        "description": "Returns the current tracking status and scan history for a single shipment by AWB number.",
         "operationId": "trackOrder",
         "parameters": [
           {
@@ -189,7 +231,8 @@
                     "status_time": "2026-08-05 10:15:00",
                     "scan_detail": []
                   }
-                }
+                },
+                "x-exampleNote": "scan_detail is empty here — a real populated example from a shipment that has moved past Pickup Pending is not yet available."
               }
             }
           },
@@ -227,7 +270,7 @@
           },
           {
             "name": "expected_delivery_date",
-            "notes": "ETA when provided."
+            "notes": "ETA when provided (IST, date-only)."
           },
           {
             "name": "current_status",
@@ -235,17 +278,30 @@
           },
           {
             "name": "status_time",
-            "notes": "Timestamp of the current status."
+            "notes": "Timestamp of the current status (IST display)."
           },
           {
             "name": "scan_detail",
-            "notes": "Array of scan events when provided."
+            "notes": "Array of {date, status, location}. date is raw UTC (Y-m-d H:i:s); status is a human-readable label; location is free text from the courier. A populated example from a moved shipment is not yet available."
           }
         ],
         "x-docNotes": [
-          "awb_number is obtained from Assign Courier, Auto-Assign, or Schedule Pickup."
+          "Most date/time fields display in IST; scan_detail[].date is the exception and is returned as the raw UTC string (Y-m-d H:i:s).",
+          "expected_delivery_date is IST, date-only."
         ],
-        "x-errorExampleUnavailable": true,
+        "x-failureMessages": [
+          {
+            "cause": "No record for this AWB",
+            "message": "We not found any record"
+          }
+        ],
+        "x-errorExample": {
+          "result": "0",
+          "message": "Error",
+          "data": {
+            "error": "We not found any record"
+          }
+        },
         "security": [
           {
             "ApiKeyPublic": []
@@ -271,8 +327,8 @@
         "tags": [
           "Utility"
         ],
-        "summary": "Register a shipper profile",
-        "description": "Registers a shipper/exporter profile used for international shipments.",
+        "summary": "Register a shipper of record (international only)",
+        "description": "Registers a shipper of record used only for international shipments — the returned shipper_id is passed into International Push Order for customs/export paperwork. Has no relationship to domestic orders.",
         "operationId": "createShipper",
         "parameters": [
           {
@@ -330,25 +386,33 @@
                     "description": "Pincode",
                     "format": "string",
                     "default": "141211"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Shipper status (required; no restricted value set)."
                   }
                 },
-                "type": "object"
+                "type": "object",
+                "required": [
+                  "name",
+                  "phone",
+                  "address_line_one",
+                  "pin_code",
+                  "status"
+                ]
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Successful operation",
             "content": {
               "application/json": {
-                "schema": {
-                  "example": {
-                    "result": "1",
-                    "message": "Success",
-                    "data": {
-                      "shipper_id": "12345"
-                    }
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": {
+                    "shipper_id": 42
                   }
                 }
               }
@@ -356,6 +420,31 @@
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "x-useCases": [
+          "Register exporter / shipper before international push"
+        ],
+        "x-docNotes": [
+          "Failures return Laravel's stock English validation text (no custom message catalog). Example: \"The phone must be 10 digits.\""
+        ],
+        "x-responseFields": [
+          {
+            "name": "shipper_id",
+            "notes": "Integer id to pass into international-push-order."
+          }
+        ],
+        "x-failureMessages": [
+          {
+            "cause": "Validation",
+            "message": "The phone must be 10 digits."
+          }
+        ],
+        "x-errorExample": {
+          "result": "0",
+          "message": "Error",
+          "data": {
+            "error": "The phone must be 10 digits."
           }
         },
         "security": [
@@ -384,7 +473,7 @@
           "Label"
         ],
         "summary": "Download the shipping label",
-        "description": "Returns the shipping label for a shipment as a base64-encoded image, once a courier has been assigned.",
+        "description": "Generates and returns the shipping label for an AWB. Pass type_of_label=PDF for a PDF URL; omit (or any other value) for the default BASE64 PNG data URI. Always generates fresh content — there is no “label not ready yet” error.",
         "operationId": "getOrderLabel",
         "parameters": [
           {
@@ -413,6 +502,19 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "type_of_label",
+            "in": "query",
+            "description": "Pass PDF (case-insensitive) for a PDF label URL. Any other value or omit → default BASE64 PNG data URI. Not validated server-side.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PDF",
+                "BASE64"
+              ]
+            }
           }
         ],
         "responses": {
@@ -424,6 +526,7 @@
                   "message": "Success",
                   "data": [
                     {
+                      "type": "BASE64",
                       "label": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
                       "created_at": "2026-08-05 12:00:00"
                     }
@@ -436,20 +539,41 @@
             "$ref": "#/components/responses/RateLimited"
           }
         },
+        "x-queryExamples": [
+          "",
+          "?type_of_label=PDF"
+        ],
         "x-responseFields": [
           {
+            "name": "data[].type",
+            "notes": "\"PDF\" or \"BASE64\" depending on type_of_label."
+          },
+          {
             "name": "data[].label",
-            "notes": "Base64 data-URL for the label image (typically PNG)."
+            "notes": "PDF: URL string. BASE64: data:image/png;base64,... data URI."
           },
           {
             "name": "data[].created_at",
             "notes": "When the label was generated."
           }
         ],
-        "x-docNotes": [
-          "awb_number comes from Assign Courier, Auto-Assign, or Schedule Pickup.",
-          "The verified response shape is a PNG base64 data-URL — not a caller-selected PDF/ZPL format."
+        "x-failureMessages": [
+          {
+            "cause": "AWB invalid / not owned",
+            "message": "The selected awb number is invalid."
+          },
+          {
+            "cause": "QR-label mode for non-qualifying courier",
+            "message": "QR Label only available for Delhivery B2B courier."
+          }
         ],
+        "x-errorExample": {
+          "result": "0",
+          "message": "Error",
+          "data": {
+            "error": "The selected awb number is invalid."
+          }
+        },
         "security": [
           {
             "ApiKeyPublic": []
@@ -749,8 +873,31 @@
             "notes": "Failure reason string (e.g. invalid warehouse)"
           }
         ],
-        "x-docNotes": [
-          "Weight is in grams. Dimensions are in cm. Dates use YYYY-MM-DD. Phone fields are digits only (no country code)."
+        "x-failureMessages": [
+          {
+            "cause": "Weight over cap",
+            "message": "Order Weight must be less than or equal 70 kg"
+          },
+          {
+            "cause": "Invalid COD amount",
+            "message": "Please enter valid cod amount"
+          },
+          {
+            "cause": "E-way bill required",
+            "message": "Gst E-way bill number is required"
+          },
+          {
+            "cause": "Courier unavailable",
+            "message": "Courier service not available, Please try later"
+          },
+          {
+            "cause": "Courier unavailable",
+            "message": "Courier not available, Please try later"
+          },
+          {
+            "cause": "Assign failure",
+            "message": "Courier not assigned. Please try again."
+          }
         ],
         "security": [
           {
@@ -778,7 +925,7 @@
           "Orders"
         ],
         "summary": "Create a new international shipment order",
-        "description": "Creates an international/export shipment order.",
+        "description": "Creates an international/export shipment order. Returns the same order_id (internal) / refrence_id (echo) split as domestic Push Order. International never takes a courier_id at push time.",
         "operationId": "internationalPushOrder",
         "parameters": [
           {
@@ -1053,9 +1200,16 @@
                     "default": ""
                   },
                   "shipper_id": {
-                    "description": "shipper_id (Get this from create-shipper API)",
-                    "format": "string",
-                    "default": ""
+                    "type": "integer",
+                    "description": "Shipper of record from create-shipper (international customs/export)"
+                  },
+                  "ref_order_id": {
+                    "type": "string",
+                    "description": "Optional reference order id"
+                  },
+                  "weight_unit": {
+                    "type": "string",
+                    "description": "Weight unit for the shipment"
                   }
                 },
                 "type": "object"
@@ -1065,14 +1219,70 @@
         },
         "responses": {
           "200": {
-            "description": "Successful operation",
-            "x-exampleUnavailable": true
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": {
+                    "Info": "Order Pushed Successfully",
+                    "order_id": "ordID",
+                    "refrence_id": "ordID"
+                  }
+                }
+              }
+            }
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           }
         },
-        "x-exampleUnavailable": true,
+        "x-useCases": [
+          "Create export / cross-border orders"
+        ],
+        "x-responseFields": [
+          {
+            "name": "Info",
+            "notes": "Human-readable success note when present."
+          },
+          {
+            "name": "order_id",
+            "notes": "Shipmozo internal order ID — use for downstream APIs."
+          },
+          {
+            "name": "refrence_id",
+            "notes": "Echo of the order_id / ref you sent."
+          },
+          {
+            "name": "error",
+            "notes": "Populated on failure."
+          }
+        ],
+        "x-failureMessages": [
+          {
+            "cause": "Aadhaar KYC not verified",
+            "message": "Kyc is not verified"
+          },
+          {
+            "cause": "Weight over cap",
+            "message": "Order Weight must be less than or equal 70 kg"
+          },
+          {
+            "cause": "E-way bill required",
+            "message": "Gst E-way bill number is required"
+          },
+          {
+            "cause": "Other field validation",
+            "message": "Additional per-field Laravel validation messages may also be returned."
+          }
+        ],
+        "x-errorExample": {
+          "result": "0",
+          "message": "Error",
+          "data": {
+            "error": "Kyc is not verified"
+          }
+        },
         "security": [
           {
             "ApiKeyPublic": []
@@ -1263,6 +1473,18 @@
                     "description": "Reason Comment",
                     "format": "string",
                     "default": ""
+                  },
+                  "pickup_alternate_phone": {
+                    "type": "string",
+                    "description": "Optional 10-digit alternate phone; must differ from pickup_phone"
+                  },
+                  "is_qc": {
+                    "type": "string",
+                    "enum": [
+                      "YES",
+                      "NO"
+                    ],
+                    "description": "Optional QC flag"
                   }
                 },
                 "type": "object"
@@ -1272,18 +1494,15 @@
         },
         "responses": {
           "200": {
-            "description": "Successful operation",
             "content": {
               "application/json": {
-                "schema": {
-                  "example": {
-                    "result": "1",
-                    "message": "Success",
-                    "data": {
-                      "Info": "Order Pushed Successfully",
-                      "order_id": "ordID",
-                      "refrence_id": "ordID"
-                    }
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": {
+                    "Info": "Order Pushed Successfully",
+                    "order_id": "ordID",
+                    "refrence_id": "ordID"
                   }
                 }
               }
@@ -1294,7 +1513,24 @@
           }
         },
         "x-useCases": [
-          "Customer return with pickup from customer address"
+          "Create reverse pickup / return orders"
+        ],
+        "x-docNotes": [
+          "Success response has no error key — shape is exactly {Info, order_id, refrence_id}."
+        ],
+        "x-responseFields": [
+          {
+            "name": "Info",
+            "notes": "Human-readable success note."
+          },
+          {
+            "name": "order_id",
+            "notes": "Shipmozo internal order ID."
+          },
+          {
+            "name": "refrence_id",
+            "notes": "Echo of your order_id / reference."
+          }
         ],
         "security": [
           {
@@ -1393,6 +1629,35 @@
         "x-useCases": [
           "Manual courier selection after rate comparison"
         ],
+        "x-failureMessages": [
+          {
+            "cause": "Bad order id",
+            "message": "Order id is not valid"
+          },
+          {
+            "cause": "Bad courier id",
+            "message": "Courier id is not valid"
+          },
+          {
+            "cause": "Assign failure",
+            "message": "Courier not assigned. Please try again."
+          },
+          {
+            "cause": "Service unavailable",
+            "message": "Courier service not available, Please try later"
+          },
+          {
+            "cause": "Courier unavailable",
+            "message": "Courier not available, Please try later"
+          }
+        ],
+        "x-errorExample": {
+          "result": "0",
+          "message": "Error",
+          "data": {
+            "error": "Order id is not valid"
+          }
+        },
         "security": [
           {
             "ApiKeyPublic": []
@@ -1485,11 +1750,15 @@
           "When rate-calculator returns pickups_automatically_scheduled: NO"
         ],
         "x-docNotes": [
-          "Only call this when Rate Calculator showed pickups_automatically_scheduled: \"NO\" for the chosen courier; otherwise the AWB is already assigned."
+          "Only call this when Rate Calculator showed pickups_automatically_scheduled: \"NO\" for the chosen courier; otherwise the AWB is already assigned.",
+          "\"Order is already scheduled\" is a SUCCESS response (result: \"1\") with order/courier/AWB/lr_number data — not a failure."
         ],
         "x-errorExample": {
           "result": "0",
-          "message": "Order not found"
+          "message": "Error",
+          "data": {
+            "error": "Order id is not valid"
+          }
         },
         "x-responseFields": [
           {
@@ -1511,6 +1780,20 @@
           {
             "name": "lr_number",
             "notes": "LR number when provided by the courier."
+          }
+        ],
+        "x-failureMessages": [
+          {
+            "cause": "Bad order id",
+            "message": "Order id is not valid"
+          },
+          {
+            "cause": "No courier assigned",
+            "message": "Order should be assigned courier"
+          },
+          {
+            "cause": "Assign failure",
+            "message": "Courier not assigned. Please try again."
           }
         ],
         "security": [
@@ -1608,6 +1891,30 @@
         },
         "x-useCases": [
           "Cancel before courier pickup"
+        ],
+        "x-failureMessages": [
+          {
+            "cause": "Invalid order id",
+            "message": "The selected order id is invalid."
+          },
+          {
+            "cause": "Invalid AWB",
+            "message": "The selected awb number is invalid."
+          },
+          {
+            "cause": "Cancel failure",
+            "message": "Courier not cancelled. Please try again."
+          }
+        ],
+        "x-errorExample": {
+          "result": "0",
+          "message": "Error",
+          "data": {
+            "error": "The selected order id is invalid."
+          }
+        },
+        "x-docNotes": [
+          "There is no distinct \"already shipped/delivered\" message — a shipment past PICKUP_PENDING falls into the generic invalid message, indistinguishable from a wrong ID."
         ],
         "security": [
           {
@@ -1707,7 +2014,7 @@
           "result": "0",
           "message": "Error",
           "data": {
-            "error": "please setup auto assign"
+            "error": "Please setup auto assign rule"
           }
         },
         "x-responseFields": [
@@ -1730,6 +2037,28 @@
           {
             "name": "courier_company_service",
             "notes": "Service level when provided."
+          }
+        ],
+        "x-failureMessages": [
+          {
+            "cause": "KYC pending",
+            "message": "Your Profile is under verification"
+          },
+          {
+            "cause": "Rules not configured",
+            "message": "Please setup auto assign rule"
+          },
+          {
+            "cause": "Courier unavailable",
+            "message": "Courier not available, Please try later"
+          },
+          {
+            "cause": "Wallet",
+            "message": "Insufficient wallet balance, Please recharge your wallet"
+          },
+          {
+            "cause": "No valid courier",
+            "message": "We not found any valid courier for this order please try again."
           }
         ],
         "security": [
@@ -1758,7 +2087,7 @@
           "Label"
         ],
         "summary": "Generate a pickup manifest",
-        "description": "Generates a pickup manifest document for the given AWB number(s).",
+        "description": "Generates pickup manifest PDF file(s) for up to 25 AWB numbers. Response data is a list of objects with file (URL) and awb_numbers.",
         "operationId": "generateManifest",
         "parameters": [
           {
@@ -1782,20 +2111,30 @@
           {
             "name": "awb_numbers",
             "in": "query",
-            "description": "One or more AWB numbers as a comma-separated list. A specific maximum count per request is not independently verified in this portal.",
+            "description": "Comma-separated AWB numbers to generate manifests for. Required. Maximum 25 AWBs per request.",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxItems": 25
             }
           }
         ],
         "responses": {
           "200": {
-            "x-exampleUnavailable": true,
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object"
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": [
+                    {
+                      "file": "https://example.com/manifests/manifest_xxx.pdf",
+                      "awb_numbers": [
+                        "AWB123",
+                        "AWB456"
+                      ]
+                    }
+                  ]
                 }
               }
             }
@@ -1804,14 +2143,42 @@
             "$ref": "#/components/responses/RateLimited"
           }
         },
-        "x-exampleUnavailable": true,
+        "x-useCases": [
+          "Generate pickup manifests for scheduled AWBs"
+        ],
         "x-queryExamples": [
-          "?awb_numbers=123123123,456456456 — supports multiple comma-separated AWB numbers"
+          "?awb_numbers=AWB1,AWB2"
         ],
         "x-docNotes": [
-          "awb_numbers supports multiple comma-separated AWB numbers. A specific maximum per request is not independently verified in this portal."
+          "If one AWB-group's generation fails internally, that failure is logged server-side and not returned — a partial failure can look like a full success unless nothing succeeded."
         ],
-        "x-errorExampleUnavailable": true,
+        "x-responseFields": [
+          {
+            "name": "data[].file",
+            "notes": "URL of the generated manifest PDF."
+          },
+          {
+            "name": "data[].awb_numbers",
+            "notes": "AWB numbers included in that manifest file."
+          }
+        ],
+        "x-failureMessages": [
+          {
+            "cause": "Validation (missing / too many / unowned AWBs)",
+            "message": "Laravel default, e.g. \"The awb numbers may not have more than 25 items.\""
+          },
+          {
+            "cause": "Nothing generated",
+            "message": "Please try again"
+          }
+        ],
+        "x-errorExample": {
+          "result": "0",
+          "message": "Error",
+          "data": {
+            "error": "Please try again"
+          }
+        },
         "security": [
           {
             "ApiKeyPublic": []
@@ -1838,7 +2205,7 @@
           "Orders"
         ],
         "summary": "List failed-delivery (NDR) orders",
-        "description": "Lists non-delivery report (NDR) shipments that need action.",
+        "description": "Lists non-delivery report (NDR) shipments that need action. Response is a paginated envelope with limit, from_to, next_page_url, total_pages, current_page, total, and data.",
         "operationId": "getAllNdrShipments",
         "parameters": [
           {
@@ -1898,14 +2265,50 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful operation",
-            "x-exampleUnavailable": true
+            "description": "Successful operation"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           }
         },
+        "x-useCases": [
+          "Review NDR orders and decide reattempt vs return"
+        ],
+        "x-queryExamples": [
+          "?page=1&per_page=25"
+        ],
+        "x-responseFields": [
+          {
+            "name": "limit",
+            "notes": "Page size."
+          },
+          {
+            "name": "from_to",
+            "notes": "Date range applied."
+          },
+          {
+            "name": "next_page_url",
+            "notes": "URL for the next page when present."
+          },
+          {
+            "name": "total_pages",
+            "notes": "Total pages."
+          },
+          {
+            "name": "current_page",
+            "notes": "Current page number."
+          },
+          {
+            "name": "total",
+            "notes": "Total matching NDR orders."
+          },
+          {
+            "name": "data[]",
+            "notes": "Per-order NDR objects (id, order_date, channel, order_id, office_name, ref_order_id, order_status, product_*, type_of_package, parcel_*, volumetric_weight, no_of_box, courier, awb_number, webparex_status, order_amount, cod_amount, payment_type, buyer_detail, warehouse_detail, delivery_attempt, courier_status, is_RTO, delivered_date, rto_date, ndr_date, rto_delivered_date)."
+          }
+        ],
         "x-exampleUnavailable": true,
+        "x-exampleUnavailableReason": "A real populated NDR order example is not yet available — field shape is documented; sample values pending.",
         "security": [
           {
             "ApiKeyPublic": []
@@ -1932,7 +2335,7 @@
           "Orders"
         ],
         "summary": "Take action on a failed delivery",
-        "description": "Takes an action on an NDR shipment (reattempt, RTO, etc.).",
+        "description": "Applies an NDR action on a shipment. Request body field action must be REATTEMPT or RETURN.",
         "operationId": "ndrOrderAction",
         "parameters": [
           {
@@ -1961,25 +2364,91 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "action",
-            "in": "query",
-            "description": "Action, in: REATTEMPT, RETURN",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful operation"
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "1",
+                  "message": "Order Reattempt Updated successfully",
+                  "data": []
+                }
+              }
+            }
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           }
         },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "REATTEMPT",
+                      "RETURN"
+                    ],
+                    "description": "NDR action: REATTEMPT or RETURN"
+                  }
+                }
+              },
+              "example": {
+                "action": "REATTEMPT"
+              }
+            }
+          }
+        },
+        "x-useCases": [
+          "Reattempt delivery or return an NDR shipment"
+        ],
+        "x-docNotes": [
+          "Success responses return data: [] — no order payload is echoed back."
+        ],
+        "x-responseFields": [
+          {
+            "name": "message",
+            "notes": "Success or failure text."
+          },
+          {
+            "name": "data",
+            "notes": "Empty array on success."
+          }
+        ],
+        "x-failureMessages": [
+          {
+            "cause": "AWB doesn't exist / not owned",
+            "message": "The selected awb number is invalid."
+          },
+          {
+            "cause": "action not REATTEMPT/RETURN",
+            "message": "The selected action is invalid."
+          },
+          {
+            "cause": "Support ticket already open",
+            "message": "Ticket is already raised for this order"
+          }
+        ],
+        "x-errorExample": {
+          "result": "0",
+          "message": "Error",
+          "data": {
+            "error": "The selected awb number is invalid."
+          }
+        },
+        "x-successNotes": [
+          "{\"result\":\"1\",\"message\":\"Order Reattempt Updated successfully\",\"data\":[]}",
+          "{\"result\":\"1\",\"message\":\"Order Reattempt Applied successfully\",\"data\":[]} (courier-level fallback / raised support ticket; same message shape for action=RETURN)"
+        ],
         "security": [
           {
             "ApiKeyPublic": []
@@ -2006,7 +2475,7 @@
           "Orders"
         ],
         "summary": "Get full details of an order",
-        "description": "Returns full details for an order by order_id.",
+        "description": "Returns the full order snapshot by Shipmozo internal order_id.",
         "operationId": "getOrderDetail",
         "parameters": [
           {
@@ -2039,14 +2508,153 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful operation",
-            "x-exampleUnavailable": true
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": {
+                    "order_id": "98765",
+                    "order_date": "2026-08-01",
+                    "order_status": "NEW_ORDER",
+                    "store_code": 0,
+                    "package_type": "SPS",
+                    "order_total": "1000",
+                    "payment_type": "PREPAID",
+                    "collectable_amount": "0",
+                    "shipping_details": [],
+                    "shipment_type": "FORWARD",
+                    "shipping_firstname": "Customer",
+                    "shipping_email": "customer@example.com",
+                    "shipping_phone": "8000042323",
+                    "shipping_address": "House 101",
+                    "shipping_address2": "",
+                    "shipping_city": "Gurgaon",
+                    "shipping_state": "Haryana",
+                    "shipping_zipcode": "122001",
+                    "shipping_country": "India",
+                    "billing_firstname": "Customer",
+                    "billing_email": "customer@example.com",
+                    "billing_phone": "8000042323",
+                    "billing_address": "House 101",
+                    "billing_address2": "",
+                    "billing_city": "Gurgaon",
+                    "billing_state": "Haryana",
+                    "billing_zipcode": "122001",
+                    "billing_country": "India",
+                    "products": [
+                      {
+                        "product": "Test Product",
+                        "price": "1000",
+                        "product_code": "SKU-001",
+                        "amount": "1000"
+                      }
+                    ],
+                    "weight": 500,
+                    "volumetric_weight": 200,
+                    "no_of_box": 1,
+                    "pickup_details": {},
+                    "total_shipping_charges": "0",
+                    "zone": "",
+                    "route_code": ""
+                  }
+                }
+              }
+            }
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           }
         },
-        "x-exampleUnavailable": true,
+        "x-docNotes": [
+          "shipping_details (awb_number, courier_company, lr_number, optionally child_awb_numbers) is populated only when order_status is PROCESS or SCHEDULED — otherwise it is [].",
+          "weight and volumetric_weight are returned in grams, not kg.",
+          "pickup_details shape differs by order type — forward orders pull from the warehouse; return orders pull pickup_* fields from the order.",
+          "For non-domestic orders, billing_* fields are literal copies of shipping_* — there is no separate billing address stored.",
+          "zone is typically a string, but the exact type is not fully confirmed for all order states (it may fall back to a richer object when no partner-zone relation is set)."
+        ],
+        "x-responseFields": [
+          {
+            "name": "order_id",
+            "notes": "Shipmozo internal order id."
+          },
+          {
+            "name": "order_date",
+            "notes": "Order date."
+          },
+          {
+            "name": "order_status",
+            "notes": "Current order status."
+          },
+          {
+            "name": "store_code",
+            "notes": "Always 0 in current responses."
+          },
+          {
+            "name": "package_type",
+            "notes": "Package type."
+          },
+          {
+            "name": "order_total",
+            "notes": "Order total amount."
+          },
+          {
+            "name": "payment_type",
+            "notes": "Payment type."
+          },
+          {
+            "name": "collectable_amount",
+            "notes": "Collectable / COD amount."
+          },
+          {
+            "name": "shipping_details",
+            "notes": "Object with awb/courier when PROCESS/SCHEDULED; otherwise []."
+          },
+          {
+            "name": "shipment_type",
+            "notes": "Shipment type."
+          },
+          {
+            "name": "shipping_*",
+            "notes": "Recipient shipping address fields."
+          },
+          {
+            "name": "billing_*",
+            "notes": "Billing address fields (copies of shipping_* for non-domestic)."
+          },
+          {
+            "name": "products",
+            "notes": "Array of {product, price, product_code, amount}."
+          },
+          {
+            "name": "weight",
+            "notes": "Weight in grams."
+          },
+          {
+            "name": "volumetric_weight",
+            "notes": "Volumetric weight in grams."
+          },
+          {
+            "name": "no_of_box",
+            "notes": "Box count."
+          },
+          {
+            "name": "pickup_details",
+            "notes": "Pickup/warehouse details (shape varies by order type)."
+          },
+          {
+            "name": "total_shipping_charges",
+            "notes": "Total shipping charges."
+          },
+          {
+            "name": "zone",
+            "notes": "Typically a string; exact type not fully confirmed for all order states."
+          },
+          {
+            "name": "route_code",
+            "notes": "Route code when present."
+          }
+        ],
         "security": [
           {
             "ApiKeyPublic": []
@@ -2254,9 +2862,21 @@
           }
         ],
         "x-docNotes": [
-          "Each courier id in the response is the courier_id used in Assign Courier.",
-          "Weight is in grams. Dimensions (length, width, height) are in cm."
+          "Each courier id in the response is the courier_id used in Assign Courier."
         ],
+        "x-failureMessages": [
+          {
+            "cause": "Weight over cap",
+            "message": "Order Weight must be less than or equal 70 kg"
+          }
+        ],
+        "x-errorExample": {
+          "result": "0",
+          "message": "Error",
+          "data": {
+            "error": "Order Weight must be less than or equal 70 kg"
+          }
+        },
         "security": [
           {
             "ApiKeyPublic": []
@@ -2283,7 +2903,7 @@
           "Utility"
         ],
         "summary": "Compare courier rates for an international shipment",
-        "description": "Compares international courier rates for a given destination and package.",
+        "description": "Compares international courier rates for a destination and package. Response is a courier array like domestic Rate Calculator, but without from_zone / to_zone (no zone concept for cross-border).",
         "operationId": "internationalRateCalculator",
         "parameters": [
           {
@@ -2384,14 +3004,29 @@
         },
         "responses": {
           "200": {
-            "description": "Successful operation",
-            "x-exampleUnavailable": true
+            "description": "Successful operation"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           }
         },
+        "x-useCases": [
+          "Quote international shipping before push"
+        ],
+        "x-responseFields": [
+          {
+            "name": "data[]",
+            "notes": "Courier quote objects similar to domestic Rate Calculator, minus from_zone / to_zone."
+          }
+        ],
         "x-exampleUnavailable": true,
+        "x-failureMessages": [
+          {
+            "cause": "Validation / weight",
+            "message": "Order Weight must be less than or equal 70 kg (and other field validation messages)"
+          }
+        ],
+        "x-errorExampleUnavailable": true,
         "security": [
           {
             "ApiKeyPublic": []
@@ -2470,7 +3105,6 @@
           "Bootstrap integration — fetch public_key and private_key",
           "Rotate keys after password change"
         ],
-        "x-errorExampleUnavailable": true,
         "x-responseFields": [
           {
             "name": "data[0].name",
@@ -2488,6 +3122,31 @@
         "x-docNotes": [
           "Success data is an array of one object — do not treat data as a plain object."
         ],
+        "x-failureMessages": [
+          {
+            "cause": "Unknown account",
+            "message": "Email or phone is not registered."
+          },
+          {
+            "cause": "Deactivated",
+            "message": "Your account has been deactivated."
+          },
+          {
+            "cause": "Non-admin login",
+            "message": "Please use main admin account to login"
+          },
+          {
+            "cause": "Bad password",
+            "message": "Invalid password"
+          }
+        ],
+        "x-errorExample": {
+          "result": "0",
+          "message": "Error",
+          "data": {
+            "error": "Invalid password"
+          }
+        },
         "x-rateLimit": {
           "limit": 500,
           "remainingHeader": "x-ratelimit-remaining",
@@ -2750,9 +3409,6 @@
             "$ref": "#/components/responses/RateLimited"
           }
         },
-        "x-docNotes": [
-          "If you reuse an existing address_title, Shipmozo typically returns the existing warehouse_id instead of creating a duplicate or erroring."
-        ],
         "x-responseFields": [
           {
             "name": "warehouse_id",
@@ -2850,7 +3506,6 @@
           }
         },
         "x-docNotes": [
-          "order_id must be Shipmozo internal order_id from push-order — not your storefront order id alone.",
           "Live responses may spell the reference field as refrence_id (missing e). Parse that spelling when reading responses."
         ],
         "x-responseFields": [
@@ -2863,6 +3518,23 @@
             "notes": "Reference echoed by the API (live spelling often omits an e)."
           }
         ],
+        "x-failureMessages": [
+          {
+            "cause": "Order already assigned",
+            "message": "You can not update warehouse because order is assigned"
+          },
+          {
+            "cause": "Order already scheduled",
+            "message": "You can not update warehouse because order is scheduled"
+          }
+        ],
+        "x-errorExample": {
+          "result": "0",
+          "message": "Error",
+          "data": {
+            "error": "You can not update warehouse because order is assigned"
+          }
+        },
         "security": [
           {
             "ApiKeyPublic": []
@@ -2880,6 +3552,127 @@
           "windowBehavior": "x-ratelimit-remaining only changes when Shipmozo sends a new HTTP response to you — it does not tick down on its own in the browser. Each API call lowers remaining by 1. After ~60 seconds, the next call you make usually shows remaining closer to 500 again (sliding window, not a live clock on the docs page).",
           "sharedQuota": true,
           "notes": "Change warehouse on existing order"
+        }
+      }
+    },
+    "/get-manifests": {
+      "get": {
+        "tags": [
+          "Label"
+        ],
+        "summary": "Get previously generated manifests",
+        "description": "Returns previously generated manifest file URLs for the given AWB numbers (max 25). Distinct from Generate Manifest — this retrieves existing files rather than creating new ones.",
+        "operationId": "getManifests",
+        "parameters": [
+          {
+            "name": "public-key",
+            "in": "header",
+            "description": "Api Public Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "private-key",
+            "in": "header",
+            "description": "Api Private Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "awb_numbers",
+            "in": "query",
+            "description": "Comma-separated AWB numbers. Required. Maximum 25 AWBs per request.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "1",
+                  "message": "Success",
+                  "data": [
+                    {
+                      "manifest_files": [
+                        "https://example.com/manifests/m1.pdf",
+                        "https://example.com/manifests/m2.pdf"
+                      ],
+                      "created_at": "2026-08-03 12:00:00"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "x-useCases": [
+          "Get previously generated manifest files"
+        ],
+        "x-queryExamples": [
+          "?awb_numbers=AWB1,AWB2"
+        ],
+        "x-docNotes": [
+          "Response shape differs from Generate Manifest: each item has manifest_files (URL array) and created_at — not {file, awb_numbers}."
+        ],
+        "x-responseFields": [
+          {
+            "name": "data[].manifest_files",
+            "notes": "Array of manifest PDF URLs."
+          },
+          {
+            "name": "data[].created_at",
+            "notes": "When the manifest set was created."
+          }
+        ],
+        "x-failureMessages": [
+          {
+            "cause": "awb_number missing",
+            "message": "AWB number not found"
+          },
+          {
+            "cause": "More than 25 requested",
+            "message": "you can get a maximum of 25 manifests"
+          },
+          {
+            "cause": "No manifest file exists yet",
+            "message": "No file found. Please generate manifest first"
+          }
+        ],
+        "x-errorExample": {
+          "result": "0",
+          "message": "Error",
+          "data": {
+            "error": "No file found. Please generate manifest first"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyPublic": []
+          },
+          {
+            "ApiKeyPrivate": []
+          }
+        ],
+        "x-rateLimit": {
+          "limit": 500,
+          "remainingHeader": "x-ratelimit-remaining",
+          "limitHeader": "x-ratelimit-limit",
+          "window": "1 minute",
+          "windowSeconds": 60,
+          "windowBehavior": "x-ratelimit-remaining only changes when Shipmozo sends a new HTTP response to you — it does not tick down on its own in the browser. Each API call lowers remaining by 1. After ~60 seconds, the next call you make usually shows remaining closer to 500 again (sliding window, not a live clock on the docs page).",
+          "sharedQuota": true,
+          "notes": "Retrieve previously generated manifests; max 25 AWBs"
         }
       }
     },
@@ -3093,7 +3886,7 @@
         {
           "name": "x-ratelimit-limit",
           "example": "500",
-          "meaning": "Max requests allowed in the current 1-minute window for your API key"
+          "meaning": "Max requests allowed in the current 1-minute window per client IP address (not per API key)"
         },
         {
           "name": "x-ratelimit-remaining",
@@ -3107,9 +3900,9 @@
       {
         "id": "profile-under-verification",
         "result": "0",
-        "typicalMessage": "Your profile is under verification",
-        "when": "Seller KYC not completed or pending approval on Shipmozo panel",
-        "action": "Finish verification in Shipmozo panel — keys may be valid while APIs stay blocked until approval"
+        "typicalMessage": "Your profile is under verification / Your Profile is under verification",
+        "when": "Seller KYC not completed or pending approval",
+        "action": "Finish verification in Shipmozo panel"
       },
       {
         "id": "invalid-api-keys",
@@ -3121,44 +3914,44 @@
       {
         "id": "login-failed",
         "result": "0",
-        "typicalMessage": "Invalid username or password (exact text unverified). Unknown email/phone may return \"Email or phone number is not registered.\"",
-        "when": "POST /login with bad credentials",
-        "action": "Verify panel username/password. Unknown accounts may return the unregistered email/phone message."
+        "typicalMessage": "Email or phone is not registered. / Your account has been deactivated. / Please use main admin account to login / Invalid password",
+        "when": "POST /login failures",
+        "action": "Verify panel username/password and that the account is active admin"
       },
       {
-        "id": "order-not-found",
+        "id": "track-not-found",
         "result": "0",
-        "typicalMessage": "Order not found",
-        "when": "Unknown order_id on assign, schedule, cancel, or get-detail",
-        "action": "Push the order first; use Shipmozo internal order_id from push-order response"
+        "typicalMessage": "We not found any record",
+        "when": "Track Order — no record for the given AWB",
+        "action": "Confirm the AWB from Assign Courier / Schedule Pickup"
+      },
+      {
+        "id": "auto-assign-not-setup",
+        "result": "0",
+        "typicalMessage": "Please setup auto assign rule",
+        "when": "auto-assign-order without panel Auto Assign rules",
+        "action": "Enable Auto Assign in the Shipmozo panel, or use assign-courier"
+      },
+      {
+        "id": "wallet-insufficient",
+        "result": "0",
+        "typicalMessage": "Insufficient wallet balance, Please recharge your wallet",
+        "when": "Auto-assign (and similar) when wallet is empty",
+        "action": "Recharge wallet in the Shipmozo panel"
       },
       {
         "id": "invalid-warehouse",
         "result": "0",
         "typicalMessage": "The selected warehouse id is invalid.",
         "when": "push-order with a warehouse_id that does not belong to the account",
-        "action": "Call get-warehouses or create-warehouse and use a returned warehouse_id"
-      },
-      {
-        "id": "auto-assign-not-setup",
-        "result": "0",
-        "typicalMessage": "please setup auto assign",
-        "when": "auto-assign-order without panel Settings → Auto Assign configured",
-        "action": "Enable Auto Assign rules in the Shipmozo panel, or use assign-courier instead"
+        "action": "Call get-warehouses or create-warehouse first"
       },
       {
         "id": "rate-limit",
         "result": "0",
         "typicalMessage": "Rate limit exceeded (or HTTP 429)",
-        "when": "Too many calls in the shared 1-minute window",
-        "action": "Pause and retry after ~60s"
-      },
-      {
-        "id": "cors-trailing-slash",
-        "result": "—",
-        "typicalMessage": "Browser CORS error",
-        "when": "Base URL ends with a trailing slash after /v1",
-        "action": "Use the base URL without a trailing slash"
+        "when": "Too many calls in the shared 1-minute window (bucketed per client IP)",
+        "action": "Back off and retry when x-ratelimit-remaining recovers"
       }
     ],
     "navigation": {
@@ -3425,6 +4218,15 @@
             "reattempt",
             "rto"
           ]
+        },
+        "getManifests": {
+          "category": "labels-tracking",
+          "order": 25,
+          "keywords": [
+            "manifest",
+            "get manifests",
+            "download manifest"
+          ]
         }
       }
     },
@@ -3510,6 +4312,13 @@
         "meaning": "Non-Delivery Report — failed delivery attempt"
       }
     ],
+    "alreadyInStateNote": {
+      "title": "“Already in this state” can be a success",
+      "body": "Several responses look like duplicates but return result: \"1\": Push Order → \"Order is already scheduled\"; Schedule Pickup → \"Order is already scheduled\"; Create Warehouse → \"warehouse with same title already exists\" (returns the existing warehouse_id). Checking only for result \"0\" will miss these. Assign Courier is not in this list — a second assign on an already-assigned order is blocked earlier and returns \"Order id is not valid\"."
+    },
+    "rateLimitIpNote": "The 500 requests/minute limit is enforced per client IP address, not per API key. If you run multiple API key pairs from behind the same network (e.g. an office NAT), they share one combined 500/min budget rather than 500 each.",
+    "timezoneNote": "API storage/app timezone is UTC. Most user-facing date/time fields are converted to IST (Asia/Kolkata) for display. expected_delivery_date is IST, date-only. Exception: Track Order scan_detail[].date is returned as the raw UTC string, not converted to IST.",
+    "optionalFieldNote": "When an optional field has nothing to provide, omit the field entirely or send null. Both are treated as “not provided” in most cases. Do not treat empty string \"\" as universally safe — some fields pass empty strings through rather than substituting a default.",
     "rateLimitGlobal": {
       "limit": 500,
       "window": "1 minute",
@@ -3540,6 +4349,15 @@
         "auth": true,
         "limit": 500,
         "notes": "Max 25 AWB numbers per request (comma-separated)"
+      },
+      {
+        "operationId": "getManifests",
+        "method": "GET",
+        "path": "/get-manifests",
+        "tag": "Label",
+        "auth": true,
+        "limit": 500,
+        "notes": "Retrieve previously generated manifests; max 25 AWBs"
       },
       {
         "operationId": "getOrderLabel",

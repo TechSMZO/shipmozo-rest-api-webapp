@@ -46,6 +46,36 @@ export function unavailableCopy(kind = "example") {
   return "Documentation for this section is not yet available.";
 }
 
+function renderFieldRows(fields) {
+  return (fields || [])
+    .map(
+      (f) => `
+      <tr>
+        <td><code>${esc(f.field)}</code></td>
+        <td>${esc(f.type)}</td>
+        <td>${requiredBadge(!!f.required)}</td>
+        <td>${esc(f.values || "—")}</td>
+        <td class="field-contract-notes">${formatNotes(f.notes || "")}</td>
+      </tr>`
+    )
+    .join("");
+}
+
+function renderFieldTable(fields) {
+  return `<table class="field-contract-table">
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Type</th>
+        <th>Required</th>
+        <th>Accepted values / units</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>${renderFieldRows(fields)}</tbody>
+  </table>`;
+}
+
 export function renderFieldContract(operationId, contracts, options = {}) {
   const entry = contracts?.[operationId];
   if (!entry) {
@@ -57,16 +87,8 @@ export function renderFieldContract(operationId, contracts, options = {}) {
       </div>`;
   }
 
-  if (entry.deferred) {
-    return `
-      <div class="field-contract-section">
-        <h2>Request Payload Reference</h2>
-        <p class="note warn">NDR Action request payload reference is deferred until verified values are available.</p>
-      </div>`;
-  }
-
   // Internal: entry.placeholder marks unverified content for engineering — never show bracket markers.
-  if (entry.placeholder && (!entry.fields || !entry.fields.length)) {
+  if (entry.placeholder && (!entry.fields || !entry.fields.length) && !entry.sections?.length) {
     return `
       <div class="field-contract-section" data-docs-unverified="payload">
         <h2>Request Payload Reference</h2>
@@ -79,16 +101,14 @@ export function renderFieldContract(operationId, contracts, options = {}) {
     ? `<p class="note warn small">Full request payload reference not yet available — showing known fields only.</p>`
     : "";
 
-  const rows = (entry.fields || [])
+  const mainTable =
+    entry.fields?.length || !entry.sections?.length ? renderFieldTable(entry.fields || []) : "";
+
+  const sectionBlocks = (entry.sections || [])
     .map(
-      (f) => `
-      <tr>
-        <td><code>${esc(f.field)}</code></td>
-        <td>${esc(f.type)}</td>
-        <td>${requiredBadge(!!f.required)}</td>
-        <td>${esc(f.values || "—")}</td>
-        <td class="field-contract-notes">${formatNotes(f.notes || "")}</td>
-      </tr>`
+      (section) => `
+      <h3 class="field-contract-section-title">${esc(section.title || "Conditional fields")}</h3>
+      ${renderFieldTable(section.fields || [])}`
     )
     .join("");
 
@@ -97,18 +117,8 @@ export function renderFieldContract(operationId, contracts, options = {}) {
       <h2>Request Payload Reference</h2>
       ${renderTip(entry)}
       ${notice}
-      <table class="field-contract-table">
-        <thead>
-          <tr>
-            <th>Field</th>
-            <th>Type</th>
-            <th>Required</th>
-            <th>Accepted values / units</th>
-            <th>Notes</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
+      ${mainTable}
+      ${sectionBlocks}
     </div>`;
 }
 

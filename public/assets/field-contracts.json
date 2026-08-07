@@ -7,14 +7,14 @@
         "type": "string",
         "required": true,
         "values": "—",
-        "notes": "Must match your own system's order ID; keep unique across retries"
+        "notes": "≤20 chars, alphanumeric only. Must be unique across retries."
       },
       {
         "field": "order_date",
         "type": "string",
         "required": true,
         "values": "YYYY-MM-DD",
-        "notes": "Order date in YYYY-MM-DD."
+        "notes": "YYYY-MM-DD. Must be within the last 6 months and no later than tomorrow (IST)."
       },
       {
         "field": "order_type",
@@ -42,7 +42,7 @@
         "type": "number",
         "required": false,
         "values": "digits only",
-        "notes": "Digits only if provided; no country code."
+        "notes": "Digits only if provided; must differ from consignee_phone."
       },
       {
         "field": "consignee_email",
@@ -70,7 +70,7 @@
         "type": "number",
         "required": true,
         "values": "—",
-        "notes": "Delivery pincode."
+        "notes": "Validated against Shipmozo's serviceable-pincode master — format-valid 6-digit codes not in that table are rejected."
       },
       {
         "field": "consignee_city",
@@ -91,7 +91,7 @@
         "type": "array",
         "required": true,
         "values": "array of objects",
-        "notes": "Array of line items. Example: [{\"name\":\"T-Shirt\",\"sku_number\":\"SKU1\",\"quantity\":1,\"discount\":\"\",\"hsn\":\"6109\",\"unit_price\":499,\"product_category\":\"Apparel\"}]"
+        "notes": "Array of line items. quantity ≤100,000; unit_price ≤10,000,000; discount ≤1,000,000; no limit on number of line items. Example shape includes name, sku_number, quantity, discount, hsn, unit_price, product_category."
       },
       {
         "field": "payment_type",
@@ -112,7 +112,7 @@
         "type": "number",
         "required": true,
         "values": "grams",
-        "notes": "Shipment weight in grams."
+        "notes": "Shipment weight in grams. Caps by type_of_package: SPS ≤70 kg; MPS/B2B overall ≤3000 kg (see package-type table in endpoint notes)."
       },
       {
         "field": "length, width, height",
@@ -133,7 +133,14 @@
         "type": "string",
         "required": false,
         "values": "—",
-        "notes": "The gst ewaybill number, gstin number for this request."
+        "notes": "gstin_number must be exactly 15 characters when provided. gst_ewaybill_number required when business rules demand it."
+      },
+      {
+        "field": "type_of_package",
+        "type": "string",
+        "required": true,
+        "values": "SPS, MPS, B2B",
+        "notes": "SPS: weight >0 ≤70kg, each L/W/H >0 ≤3000cm. MPS/B2B: overall weight >0 ≤3000kg; per-box no_of_box/L/W/H >0 ≤2000; per-box weight optional ≤70kg (MPS) or ≤400kg (B2B)."
       }
     ]
   },
@@ -144,134 +151,169 @@
         "field": "order_id",
         "type": "string",
         "required": true,
-        "values": "—",
-        "notes": "Your storefront / OMS order id — must be unique across retries."
+        "values": "≤20 alphanumeric",
+        "notes": "Required, unique, ≤20 chars, alphanumeric"
       },
       {
         "field": "order_date",
         "type": "string",
         "required": true,
         "values": "YYYY-MM-DD",
-        "notes": "Use ISO date format YYYY-MM-DD"
-      },
-      {
-        "field": "order_type",
-        "type": "string",
-        "required": false,
-        "values": "e.g. ESSENTIALS",
-        "notes": "Goods category: ESSENTIALS or NON ESSENTIALS."
+        "notes": "Required"
       },
       {
         "field": "pickup_name",
         "type": "string",
         "required": true,
-        "values": "—",
-        "notes": "The pickup name for this request."
+        "values": "letters/spaces/periods",
+        "notes": "Letters, spaces, periods only — no digits or special characters"
       },
       {
         "field": "pickup_phone",
-        "type": "number",
+        "type": "string",
         "required": true,
-        "values": "digits only",
-        "notes": "Digits only — no spaces or dashes"
+        "values": "10-digit",
+        "notes": "Required, 10 digits"
+      },
+      {
+        "field": "pickup_alternate_phone",
+        "type": "string",
+        "required": false,
+        "values": "10-digit",
+        "notes": "Optional; must differ from pickup_phone"
       },
       {
         "field": "pickup_email",
         "type": "string",
         "required": false,
         "values": "—",
-        "notes": "The pickup email for this request."
+        "notes": "Optional"
       },
       {
-        "field": "pickup_address_line_one",
+        "field": "pickup_address_line_one / pickup_address_line_two",
         "type": "string",
         "required": true,
-        "values": "—",
-        "notes": "The pickup address line one for this request."
-      },
-      {
-        "field": "pickup_address_line_two",
-        "type": "string",
-        "required": false,
-        "values": "—",
-        "notes": "The pickup address line two for this request."
+        "values": "combined ≤200",
+        "notes": "Combined ≤200 characters; some special characters restricted"
       },
       {
         "field": "pickup_pin_code",
-        "type": "number",
-        "required": true,
-        "values": "—",
-        "notes": "The pickup pin code for this request."
-      },
-      {
-        "field": "pickup_city",
         "type": "string",
         "required": true,
-        "values": "—",
-        "notes": "The pickup city for this request."
-      },
-      {
-        "field": "pickup_state",
-        "type": "string",
-        "required": true,
-        "values": "—",
-        "notes": "The pickup state for this request."
-      },
-      {
-        "field": "product_detail",
-        "type": "array",
-        "required": true,
-        "values": "same shape as Push Order",
-        "notes": "Array of line items (name, sku, qty, price, etc.)."
-      },
-      {
-        "field": "payment_type",
-        "type": "string",
-        "required": true,
-        "values": "PREPAID, COD",
-        "notes": "PREPAID or COD."
-      },
-      {
-        "field": "weight",
-        "type": "number",
-        "required": true,
-        "values": "kg",
-        "notes": "Shipment weight in kg for return orders."
-      },
-      {
-        "field": "length, width, height",
-        "type": "number",
-        "required": true,
-        "values": "cm",
-        "notes": "Accepted values: cm."
+        "values": "must exist",
+        "notes": "Required; must exist in pincode master"
       },
       {
         "field": "warehouse_id",
         "type": "string",
         "required": false,
-        "values": "—",
-        "notes": "Shipmozo warehouse id from get-warehouses / create-warehouse."
-      },
-      {
-        "field": "return_reason_id",
-        "type": "number",
-        "required": true,
-        "values": "from Get Return Reason",
-        "notes": "Id from GET /get-return-reason."
-      },
-      {
-        "field": "customer_request",
-        "type": "string",
-        "required": true,
-        "values": "e.g. REFUND",
-        "notes": "Accepted values not fully verified yet — use values from your Shipmozo panel"
+        "values": "must exist",
+        "notes": "Optional; must exist for the calling user"
       },
       {
         "field": "reason_comment",
         "type": "string",
         "required": false,
         "values": "—",
-        "notes": "The reason comment for this request."
+        "notes": "Optional free-text reason"
+      },
+      {
+        "field": "customer_request",
+        "type": "string",
+        "required": true,
+        "values": "REFUND, EXCHANGE",
+        "notes": "Send the string \"REFUND\" or \"EXCHANGE\" (case-sensitive). Do not send 1/2."
+      },
+      {
+        "field": "return_reason_id",
+        "type": "number",
+        "required": true,
+        "values": "from get-return-reason",
+        "notes": "Must exist in return-reason list. Id→title mapping not yet available."
+      },
+      {
+        "field": "weight / length / width / height",
+        "type": "number",
+        "required": true,
+        "values": "numeric, ≠0",
+        "notes": "Required, numeric, not zero — NO upper bound (unlike forward orders)."
+      },
+      {
+        "field": "is_qc",
+        "type": "string",
+        "required": false,
+        "values": "YES, NO",
+        "notes": "Optional QC flag"
+      },
+      {
+        "field": "payment_type",
+        "type": "string",
+        "required": true,
+        "values": "PREPAID",
+        "notes": "PREPAID only — COD not allowed for returns"
+      },
+      {
+        "field": "product_detail.*.name",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Line item name"
+      },
+      {
+        "field": "product_detail.*.sku_number",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "SKU"
+      },
+      {
+        "field": "product_detail.*.discount",
+        "type": "number",
+        "required": false,
+        "values": "≤10,000",
+        "notes": "Discount ≤10,000"
+      },
+      {
+        "field": "product_detail.*.hsn",
+        "type": "string",
+        "required": false,
+        "values": "≤8 chars",
+        "notes": "HSN ≤8 characters — different from domestic Push Order's hsn limit"
+      },
+      {
+        "field": "product_detail.*.quantity",
+        "type": "number",
+        "required": true,
+        "values": "≤100,000",
+        "notes": "Quantity ≤100,000"
+      },
+      {
+        "field": "product_detail.*.unit_price",
+        "type": "number",
+        "required": true,
+        "values": "≤1,000,000",
+        "notes": "Unit price ≤1,000,000"
+      },
+      {
+        "field": "product_detail.*.product_category",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Category"
+      },
+      {
+        "field": "product_detail.*.brand",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Return-only field — not on domestic Push Order"
+      },
+      {
+        "field": "product_detail.*.color",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Return-only field — not on domestic Push Order"
       }
     ]
   },
@@ -339,7 +381,6 @@
   },
   "rateCalculator": {
     "title": "Rate Calculator",
-    "tip": "Tip: to check if a pincode pair is serviceable, call this endpoint — one or more couriers returned means the route is serviceable. An empty list or result \"0\" means the pincodes are not serviceable.",
     "fields": [
       {
         "field": "order_id",
@@ -422,7 +463,6 @@
   },
   "createWarehouse": {
     "title": "Create Warehouse",
-    "tip": "address_title must be unique for new warehouses. Reusing an existing address_title typically returns the existing warehouse_id instead of erroring.",
     "fields": [
       {
         "field": "address_title",
@@ -508,6 +548,13 @@
         "required": true,
         "values": "path param",
         "notes": "From Assign Courier or Schedule Pickup"
+      },
+      {
+        "field": "type_of_label",
+        "type": "string",
+        "required": false,
+        "values": "PDF (else → BASE64)",
+        "notes": "PDF → DomPDF → S3 URL, response type \"PDF\". Omit or any other value → HTML→PDF→Imagick→base64 PNG data URI, response type \"BASE64\". Not validated server-side."
       }
     ]
   },
@@ -519,7 +566,7 @@
         "type": "string",
         "required": true,
         "values": "query param",
-        "notes": "From Assign Courier or Schedule Pickup"
+        "notes": "Single AWB from Assign Courier or Schedule Pickup"
       }
     ]
   },
@@ -530,80 +577,490 @@
         "field": "order_id",
         "type": "string",
         "required": true,
-        "values": "query param",
-        "notes": "Your storefront / OMS order id — must be unique across retries."
+        "values": "path param",
+        "notes": "Shipmozo internal order_id"
       }
     ]
   },
   "internationalPushOrder": {
     "title": "International Push Order",
-    "placeholder": true,
-    "partialNotice": true,
     "fields": [
       {
-        "field": "type_of_package",
+        "field": "order_id",
         "type": "string",
         "required": true,
-        "values": "SPS, B2B, MPS",
-        "notes": "Package type enum as accepted by Shipmozo (see accepted values)."
+        "values": "—",
+        "notes": "Your order reference"
       },
       {
-        "field": "shipment_purpose",
+        "field": "ref_order_id",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Optional reference order id"
+      },
+      {
+        "field": "order_date",
         "type": "string",
         "required": true,
-        "values": "SCSB4, CSB5, DSCB4",
-        "notes": "Accepted values: SCSB4, CSB5, DSCB4."
+        "values": "YYYY-MM-DD",
+        "notes": "Order date"
+      },
+      {
+        "field": "consignee_name",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Recipient full name"
+      },
+      {
+        "field": "consignee_company_name",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Recipient company"
+      },
+      {
+        "field": "consignee_phone",
+        "type": "string",
+        "required": true,
+        "values": "digits",
+        "notes": "Recipient phone"
+      },
+      {
+        "field": "consignee_alternate_phone",
+        "type": "string",
+        "required": false,
+        "values": "digits",
+        "notes": "Alternate phone"
+      },
+      {
+        "field": "consignee_email",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Recipient email"
+      },
+      {
+        "field": "consignee_address_line_one",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Primary address"
+      },
+      {
+        "field": "consignee_address_line_two",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Secondary address"
       },
       {
         "field": "consignee_country_id",
         "type": "number",
         "required": true,
-        "values": "from Countries API",
-        "notes": "Do not hardcode"
+        "values": "from /countries",
+        "notes": "Country id (India id 1 not listed by /countries)"
+      },
+      {
+        "field": "consignee_pin_code",
+        "type": "string",
+        "required": true,
+        "values": "max 20",
+        "notes": "Required, max:20 only — NO pincode-master existence check (unlike domestic Push Order)."
+      },
+      {
+        "field": "consignee_state",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "State"
+      },
+      {
+        "field": "consignee_city",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "City"
+      },
+      {
+        "field": "consignee_gst_number",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Consignee GST if applicable"
+      },
+      {
+        "field": "warehouse_id",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "From get-warehouses / create-warehouse"
+      },
+      {
+        "field": "shipper_id",
+        "type": "number",
+        "required": false,
+        "values": "from create-shipper",
+        "notes": "Shipper of record for customs/export"
+      },
+      {
+        "field": "gstin_number",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Shipper GSTIN"
+      },
+      {
+        "field": "gst_ewaybill_number",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "E-way bill when required"
+      },
+      {
+        "field": "type_of_package",
+        "type": "string",
+        "required": true,
+        "values": "SPS, MPS",
+        "notes": "SPS or MPS only — no B2B for international"
+      },
+      {
+        "field": "shipment_purpose",
+        "type": "string",
+        "required": true,
+        "values": "DCSB4, SCSB4, CSB5",
+        "notes": "Shipment purpose / customs scheme"
+      },
+      {
+        "field": "weight_unit",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Weight unit"
       },
       {
         "field": "currency",
         "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Currency code"
+      },
+      {
+        "field": "weight",
+        "type": "number",
         "required": true,
-        "values": "INR (seen in examples)",
-        "notes": "Full international field list not yet verified"
+        "values": "kg",
+        "notes": "Weight in kg; SPS/MPS caps apply (see notes). Not grams."
+      },
+      {
+        "field": "length / width / height",
+        "type": "number",
+        "required": true,
+        "values": "cm",
+        "notes": "Dimensions in cm"
+      },
+      {
+        "field": "row_content.*",
+        "type": "array",
+        "required": true,
+        "values": "line items",
+        "notes": "Customs line-item content fields"
+      }
+    ],
+    "sections": [
+      {
+        "title": "Required when shipment_purpose is CSB5",
+        "fields": [
+          {
+            "field": "iec_number",
+            "type": "string",
+            "required": true,
+            "values": "CSB5",
+            "notes": "Import Export Code"
+          },
+          {
+            "field": "terms_of_invoice",
+            "type": "string",
+            "required": true,
+            "values": "CSB5",
+            "notes": "Terms of invoice"
+          },
+          {
+            "field": "ecomm",
+            "type": "string",
+            "required": true,
+            "values": "CSB5",
+            "notes": "E-commerce flag / value as required by CSB5"
+          },
+          {
+            "field": "ad_code",
+            "type": "string",
+            "required": true,
+            "values": "CSB5",
+            "notes": "AD code"
+          },
+          {
+            "field": "meis",
+            "type": "string",
+            "required": true,
+            "values": "CSB5",
+            "notes": "MEIS"
+          },
+          {
+            "field": "export_type",
+            "type": "string",
+            "required": true,
+            "values": "CSB5",
+            "notes": "Export type (BOND / UT trigger further fields)"
+          },
+          {
+            "field": "incoterms",
+            "type": "string",
+            "required": true,
+            "values": "CSB5",
+            "notes": "Incoterms"
+          },
+          {
+            "field": "invoice_number",
+            "type": "string",
+            "required": true,
+            "values": "CSB5",
+            "notes": "Invoice number"
+          },
+          {
+            "field": "invoice_date",
+            "type": "string",
+            "required": true,
+            "values": "CSB5",
+            "notes": "Invoice date"
+          }
+        ]
+      },
+      {
+        "title": "Also required when export_type is BOND or UT",
+        "fields": [
+          {
+            "field": "lut_number",
+            "type": "string",
+            "required": true,
+            "values": "BOND/UT",
+            "notes": "LUT number"
+          },
+          {
+            "field": "lut_till_date",
+            "type": "string",
+            "required": true,
+            "values": "BOND/UT",
+            "notes": "LUT valid-till date"
+          },
+          {
+            "field": "lut_issue_date",
+            "type": "string",
+            "required": true,
+            "values": "BOND/UT",
+            "notes": "LUT issue date"
+          }
+        ]
       }
     ]
   },
   "internationalRateCalculator": {
     "title": "International Rate Calculator",
-    "placeholder": true,
-    "partialNotice": true,
-    "fields": []
+    "fields": [
+      {
+        "field": "pickup_pincode",
+        "type": "string/number",
+        "required": true,
+        "values": "must exist",
+        "notes": "Validated against Shipmozo pincode master — must exist."
+      },
+      {
+        "field": "delivery_country_id",
+        "type": "number",
+        "required": true,
+        "values": "from /countries",
+        "notes": "Destination country id"
+      },
+      {
+        "field": "delivery_pincode",
+        "type": "string",
+        "required": true,
+        "values": "presence only",
+        "notes": "Required, but NO format or existence check — unlike pickup_pincode."
+      },
+      {
+        "field": "order_amount",
+        "type": "number",
+        "required": true,
+        "values": "—",
+        "notes": "Order amount"
+      },
+      {
+        "field": "type_of_package",
+        "type": "string",
+        "required": true,
+        "values": "SPS, MPS",
+        "notes": "Package type"
+      },
+      {
+        "field": "shipment_purpose",
+        "type": "string",
+        "required": true,
+        "values": "DCSB4, SCSB4, CSB5",
+        "notes": "Shipment purpose"
+      },
+      {
+        "field": "weight",
+        "type": "number",
+        "required": true,
+        "values": "grams",
+        "notes": "≤70,000 (SPS) / ≤10,000,000 (MPS). Different unit & caps from International Push Order."
+      },
+      {
+        "field": "dimensions",
+        "type": "array",
+        "required": true,
+        "values": "cm",
+        "notes": "Each box: no_of_box ≤100 SPS / ≤1,000 MPS; length/width/height ≤1,000"
+      }
+    ]
   },
   "createShipper": {
     "title": "Create Shipper",
-    "placeholder": true,
-    "fields": []
+    "tip": "International shipments only — returned shipper_id feeds International Push Order.",
+    "fields": [
+      {
+        "field": "name",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Shipper / exporter name"
+      },
+      {
+        "field": "email",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Optional email"
+      },
+      {
+        "field": "phone",
+        "type": "string",
+        "required": true,
+        "values": "exactly 10 digits",
+        "notes": "Required; exactly 10 digits"
+      },
+      {
+        "field": "address_line_one",
+        "type": "string",
+        "required": true,
+        "values": "—",
+        "notes": "Primary address"
+      },
+      {
+        "field": "address_line_two",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Secondary address"
+      },
+      {
+        "field": "pin_code",
+        "type": "string",
+        "required": true,
+        "values": "must exist",
+        "notes": "Required; must exist in pincode master"
+      },
+      {
+        "field": "status",
+        "type": "string",
+        "required": true,
+        "values": "any",
+        "notes": "Required; no restricted value set"
+      }
+    ]
   },
   "Countries": {
     "title": "Countries",
-    "placeholder": true,
-    "partialNotice": true,
     "fields": []
   },
   "getAllNdrShipments": {
-    "title": "Get NDR Orders",
-    "placeholder": true,
-    "partialNotice": true,
-    "fields": []
+    "title": "Get NDR All",
+    "tip": "A real populated NDR order example is not yet available.",
+    "fields": [
+      {
+        "field": "from",
+        "type": "string",
+        "required": false,
+        "values": "dd-mm-yyyy",
+        "notes": "From date; default ~2 months"
+      },
+      {
+        "field": "to",
+        "type": "string",
+        "required": false,
+        "values": "dd-mm-yyyy",
+        "notes": "To date; default ~2 months"
+      },
+      {
+        "field": "per_page",
+        "type": "string",
+        "required": false,
+        "values": "max 100, default 25",
+        "notes": "Records per page"
+      },
+      {
+        "field": "page",
+        "type": "string",
+        "required": false,
+        "values": "—",
+        "notes": "Page number"
+      }
+    ]
   },
   "ndrOrderAction": {
     "title": "NDR Action",
-    "placeholder": true,
-    "deferred": true,
-    "fields": []
+    "fields": [
+      {
+        "field": "awb_number",
+        "type": "string",
+        "required": true,
+        "values": "path param",
+        "notes": "NDR shipment AWB"
+      },
+      {
+        "field": "action",
+        "type": "string",
+        "required": true,
+        "values": "REATTEMPT, RETURN",
+        "notes": "Required enum — use tester dropdown"
+      }
+    ]
   },
   "generateManifest": {
     "title": "Generate Manifest",
-    "tip": "Pass AWB numbers as a comma-separated list. A specific maximum per request is not independently verified here.",
-    "placeholder": true,
-    "unavailableMessage": "Full request payload reference not yet available for Generate Manifest",
-    "fields": []
+    "fields": [
+      {
+        "field": "awb_numbers",
+        "type": "string (query)",
+        "required": true,
+        "values": "comma-separated, max 25",
+        "notes": "Required. Confirmed max 25 AWBs."
+      }
+    ]
+  },
+  "getManifests": {
+    "title": "Get Manifests",
+    "tip": "Retrieves existing files — generate first if you see \"No file found. Please generate manifest first\".",
+    "fields": [
+      {
+        "field": "awb_numbers",
+        "type": "string (query)",
+        "required": true,
+        "values": "comma-separated, max 25",
+        "notes": "Required. Max 25 AWBs."
+      }
+    ]
   }
 }
